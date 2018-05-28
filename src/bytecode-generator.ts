@@ -1,3 +1,4 @@
+import * as assert from "assert";
 import * as Ast from "estree";
 import { Opcode } from "./bytecode";
 
@@ -18,7 +19,7 @@ class BytecodeGenerator {
 
   freeRegister(register : number) {
     this.liveRegisterCount--;
-    console.assert(this.liveRegisterCount === register);
+    assert.strictEqual(this.liveRegisterCount, register);
   }
 
   // Rudimentary error handling.

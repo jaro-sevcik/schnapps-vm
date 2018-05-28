@@ -1,3 +1,5 @@
+import * as assert from "assert";
+
 export enum Opcode {
   LoadInteger,
   Load,
@@ -72,8 +74,8 @@ export function printBytecode(bytecodes : number[]) {
         }
       }
     }
-    console.assert(i === ops.length);
+    assert.strictEqual(i, ops.length);
     console.log(s);
   }
-  console.assert(offset === bytecodes.length);
+  assert.strictEqual(offset, bytecodes.length);
 }
