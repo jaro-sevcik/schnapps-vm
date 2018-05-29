@@ -5,10 +5,10 @@ import * as Interpreter from "./interpreter";
 
 export class VirtualMachine {
 
-  execute(code : string) {
+  execute(code : string, out : (s : string) => void) {
     const ast = Parser.parse(code);
     const bytecode = BytecodeGenerator.generate(ast);
     printBytecode(bytecode);
-    Interpreter.execute(bytecode);
+    Interpreter.execute(bytecode, out);
   }
 }

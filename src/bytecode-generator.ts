@@ -147,6 +147,10 @@ class BytecodeGenerator {
         this.bytecodes.push(
             Opcode.Add, destination, destination, rightRegister);
         break;
+      case "-":
+        this.bytecodes.push(
+            Opcode.Sub, destination, destination, rightRegister);
+        break;
       default:
         this.throwError(e);
     }

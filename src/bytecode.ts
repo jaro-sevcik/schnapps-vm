@@ -4,6 +4,9 @@ export enum Opcode {
   LoadInteger,
   Load,
   Add,
+  Sub,
+  Mul,
+  Div,
   Print,
 }
 
@@ -33,6 +36,9 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
   register(o.LoadInteger, k.OutputRegister, k.Constant);
   register(o.Load, k.OutputRegister, k.InputRegister);
   register(o.Add, k.OutputRegister, k.InputRegister, k.InputRegister);
+  register(o.Sub, k.OutputRegister, k.InputRegister, k.InputRegister);
+  register(o.Mul, k.OutputRegister, k.InputRegister, k.InputRegister);
+  register(o.Div, k.OutputRegister, k.InputRegister, k.InputRegister);
   register(o.Print, k.InputRegister);
 }
 

@@ -16,5 +16,5 @@ fs.readFile(file, "utf8", (err : any, contents : string) => {
     process.exit(1);
   }
   const jsvm = new VirtualMachine();
-  jsvm.execute(contents);
+  jsvm.execute(contents, console.log);
 });

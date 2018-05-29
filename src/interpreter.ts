@@ -1,6 +1,7 @@
 import { Opcode } from "./bytecode";
 
-export function execute(bytecodeArray : number[]) {
+export function execute(bytecodeArray : number[],
+                        out : (s : string) => void) {
   let offset = 0;
   const registers : number[] = [];
   while (offset < bytecodeArray.length) {
@@ -25,9 +26,30 @@ export function execute(bytecodeArray : number[]) {
         registers[result] = registers[left] + registers[right];
         break;
       }
+      case Opcode.Sub: {
+        const result = bytecodeArray[offset++];
+        const left = bytecodeArray[offset++];
+        const right = bytecodeArray[offset++];
+        registers[result] = registers[left] - registers[right];
+        break;
+      }
+      case Opcode.Mul: {
+        const result = bytecodeArray[offset++];
+        const left = bytecodeArray[offset++];
+        const right = bytecodeArray[offset++];
+        registers[result] = registers[left] * registers[right];
+        break;
+      }
+      case Opcode.Div: {
+        const result = bytecodeArray[offset++];
+        const left = bytecodeArray[offset++];
+        const right = bytecodeArray[offset++];
+        registers[result] = registers[left] / registers[right];
+        break;
+      }
       case Opcode.Print: {
         const register = bytecodeArray[offset++];
-        console.log(registers[register]);
+        out(registers[register].toString());
         break;
       }
       default:
