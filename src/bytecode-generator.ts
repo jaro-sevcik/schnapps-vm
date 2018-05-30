@@ -98,6 +98,10 @@ class BytecodeGenerator {
       case "BinaryExpression":
         this.visitBinaryExpression(e as Ast.BinaryExpression, destination);
         break;
+      case "AssignmentExpression":
+        this.visitAssignmentExpression(e as Ast.AssignmentExpression,
+                                       destination);
+        break;
       case "Literal":
         this.visitLiteral(e as Ast.Literal, destination);
         break;
@@ -135,8 +139,18 @@ class BytecodeGenerator {
     this.freeRegister(register);
   }
 
+  visitAssignmentExpression(e : Ast.AssignmentExpression,
+                            destination : number) {
+    if (e.operator !== "=") this.throwError(e);
+    if (e.left.type !== "Identifier") this.throwError(e);
+    const id = e.left as Ast.Identifier;
+    if (!this.variables.has(id.name)) this.throwError(e);
+    const register = this.variables.get(id.name);
+    this.visitExpression(e.right, register);
+  }
+
   visitBinaryExpression(e : Ast.BinaryExpression, destination : number) {
-    // Visit the left operand, store the result in {destination}.
+      // Visit the left operand, store the result in {destination}.
     const left = this.visitExpression(e.left, destination);
     // Allocate a new register for the right operand, and visit the operand.
     const rightRegister = this.allocateRegister();
