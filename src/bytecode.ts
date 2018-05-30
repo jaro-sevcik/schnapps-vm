@@ -7,6 +7,9 @@ export enum Opcode {
   Sub,
   Mul,
   Div,
+  TestEqual,
+  TestLessThan,
+  TestLessThanOrEqual,
   Print,
 }
 
@@ -39,6 +42,10 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
   register(o.Sub, k.OutputRegister, k.InputRegister, k.InputRegister);
   register(o.Mul, k.OutputRegister, k.InputRegister, k.InputRegister);
   register(o.Div, k.OutputRegister, k.InputRegister, k.InputRegister);
+  register(o.TestEqual, k.OutputRegister, k.InputRegister, k.InputRegister);
+  register(o.TestLessThan, k.OutputRegister, k.InputRegister, k.InputRegister);
+  register(o.TestLessThanOrEqual, k.OutputRegister, k.InputRegister,
+           k.InputRegister);
   register(o.Print, k.InputRegister);
 }
 

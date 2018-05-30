@@ -24,7 +24,7 @@ class BytecodeGenerator {
 
   // Rudimentary error handling.
   throwError(n : Ast.Node) {
-    console.error("Unsupported Ast node of type " + n.type);
+    throw new Error("Unsupported Ast node of type " + n.type);
   }
 
   // Entry point for generating bytecodes for the program.
@@ -150,6 +150,26 @@ class BytecodeGenerator {
       case "-":
         this.bytecodes.push(
             Opcode.Sub, destination, destination, rightRegister);
+        break;
+      case "*":
+        this.bytecodes.push(
+            Opcode.Mul, destination, destination, rightRegister);
+        break;
+      case "/":
+        this.bytecodes.push(
+            Opcode.Div, destination, destination, rightRegister);
+        break;
+      case "==":
+        this.bytecodes.push(
+          Opcode.TestEqual, destination, destination, rightRegister);
+        break;
+      case "<":
+        this.bytecodes.push(
+          Opcode.TestLessThan, destination, destination, rightRegister);
+        break;
+      case "<=":
+        this.bytecodes.push(
+          Opcode.TestLessThanOrEqual, destination, destination, rightRegister);
         break;
       default:
         this.throwError(e);

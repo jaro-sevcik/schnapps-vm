@@ -47,6 +47,30 @@ export function execute(bytecodeArray : number[],
         registers[result] = registers[left] / registers[right];
         break;
       }
+      case Opcode.TestEqual: {
+        const result = bytecodeArray[offset++];
+        const left = bytecodeArray[offset++];
+        const right = bytecodeArray[offset++];
+        // TODO Fix to return boolean.
+        registers[result] = +(registers[left] === registers[right]);
+        break;
+      }
+      case Opcode.TestLessThan: {
+        const result = bytecodeArray[offset++];
+        const left = bytecodeArray[offset++];
+        const right = bytecodeArray[offset++];
+        // TODO Fix to return boolean.
+        registers[result] = +(registers[left] < registers[right]);
+        break;
+      }
+      case Opcode.TestLessThanOrEqual: {
+        const result = bytecodeArray[offset++];
+        const left = bytecodeArray[offset++];
+        const right = bytecodeArray[offset++];
+        // TODO Fix to return boolean.
+        registers[result] = +(registers[left] <= registers[right]);
+        break;
+      }
       case Opcode.Print: {
         const register = bytecodeArray[offset++];
         out(registers[register].toString());
