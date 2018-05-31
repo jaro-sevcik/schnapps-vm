@@ -2,7 +2,12 @@ import { IVMConfig, VirtualMachine } from "./vm";
 
 class TestConfig implements IVMConfig {
     out = "";
-    printBytecode = false;
+    printBytecode : boolean;
+
+    constructor(printBytecode = false) {
+        this.printBytecode = printBytecode;
+    }
+
     printerFunction = (s : string) => { this.out += s; };
 }
 
@@ -89,7 +94,7 @@ test("run_print_assign", () => {
 
 test("run_while2", () => {
     const vm = new VirtualMachine();
-    const config = new TestConfig();
+    const config = new TestConfig(true);
     vm.execute(`var i = 0; var s = 0;
                 while (i < 10) {
                     i = i + 1;
