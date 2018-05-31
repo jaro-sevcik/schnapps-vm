@@ -71,6 +71,20 @@ export function execute(bytecodeArray : number[],
         registers[result] = +(registers[left] <= registers[right]);
         break;
       }
+      case Opcode.Jump:
+      case Opcode.JumpLoop: {
+        const target = bytecodeArray[offset++];
+        offset = target;
+        break;
+      }
+      case Opcode.JumpIf: {
+        const condition = bytecodeArray[offset++];
+        const target = bytecodeArray[offset++];
+        if (registers[condition] !== 0) {
+          offset = target;
+        }
+        break;
+      }
       case Opcode.Print: {
         const register = bytecodeArray[offset++];
         out(registers[register].toString());

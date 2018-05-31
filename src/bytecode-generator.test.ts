@@ -86,3 +86,16 @@ test("run_print_assign", () => {
                config);
     expect(config.out).toBe("2");
 });
+
+test("run_while2", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig();
+    vm.execute(`var i = 0; var s = 0;
+                while (i < 10) {
+                    i = i + 1;
+                    s = s + 2;
+                }
+                print(s);
+               `, config);
+    expect(config.out).toBe("2");
+});

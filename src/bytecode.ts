@@ -10,10 +10,13 @@ export enum Opcode {
   TestEqual,
   TestLessThan,
   TestLessThanOrEqual,
+  Jump,
+  JumpLoop,
+  JumpIf,
   Print,
 }
 
-enum OperandKind { OutputRegister, InputRegister, Constant }
+enum OperandKind { OutputRegister, InputRegister, Constant, Label }
 
 class BytecodeDescriptor {
   name : string;
@@ -46,6 +49,9 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
   register(o.TestLessThan, k.OutputRegister, k.InputRegister, k.InputRegister);
   register(o.TestLessThanOrEqual, k.OutputRegister, k.InputRegister,
            k.InputRegister);
+  register(o.Jump, k.Label);
+  register(o.JumpLoop, k.Label);
+  register(o.JumpIf, k.InputRegister, k.Label);
   register(o.Print, k.InputRegister);
 }
 
@@ -82,8 +88,11 @@ export function printBytecode(bytecodes : number[]) {
         isFirst = false;
         if (ops[i] === OperandKind.InputRegister) {
           s += "r" + bytecodes[offset++];
-        } else {
+        } else if (ops[i] === OperandKind.Constant) {
           s += bytecodes[offset++];
+        } else {
+          assert.strictEqual(ops[i], OperandKind.Label);
+          s += `+${bytecodes[offset++]}`;
         }
       }
     }

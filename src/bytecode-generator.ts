@@ -2,6 +2,19 @@ import * as assert from "assert";
 import * as Ast from "estree";
 import { Opcode } from "./bytecode";
 
+class Label {
+  static Bound(offset : number) : Label {
+    const l : Label = new Label();
+    l.offset = offset;
+    return l;
+  }
+
+  offset? : number;
+  patchPositions : number[] = [];
+}
+
+const unboundLabelSentinel = -123;
+
 class BytecodeGenerator {
   bytecodes : number[];
   variables = new Map<string, number>();
@@ -20,6 +33,29 @@ class BytecodeGenerator {
   freeRegister(register : number) {
     this.liveRegisterCount--;
     assert.strictEqual(this.liveRegisterCount, register);
+  }
+
+  createLoopLabel() : Label {
+    return new Label();
+  }
+
+  bindLabel(l : Label) {
+    assert.strictEqual(l.offset, undefined);
+    const currentOffset = this.bytecodes.length;
+    for (const p of l.patchPositions) {
+      assert.strictEqual(this.bytecodes[p], unboundLabelSentinel);
+      this.bytecodes[p] = currentOffset;
+    }
+    l.patchPositions.length = 0;
+  }
+
+  pushLabel(l : Label) {
+    if (!l.offset) {
+      l.patchPositions.push(this.bytecodes.length);
+      this.bytecodes.push(unboundLabelSentinel);
+    } else {
+      this.bytecodes.push(l.offset);
+    }
   }
 
   // Rudimentary error handling.
@@ -48,6 +84,14 @@ class BytecodeGenerator {
         const expression = (s as Ast.ExpressionStatement).expression;
         this.visitExpression(expression, null);
         break;
+      case "WhileStatement":
+        this.visitWhileStatement(s as Ast.WhileStatement);
+        break;
+      case "BlockStatement": {
+        const b = s as Ast.BlockStatement;
+        this.visitStatementList(b.body);
+        break;
+      }
       default:
         this.throwError(s);
         break;
@@ -88,6 +132,22 @@ class BytecodeGenerator {
       if (typeof init.value !== "number") this.throwError(init);
       this.defineVariable(id.name, init.value as number);
     }
+  }
+
+  visitWhileStatement(s : Ast.WhileStatement) {
+    const loop = new Label();
+    this.bindLabel(loop);
+    // Visit the condition.
+    const test_register = this.allocateRegister();
+    this.visitExpression(s.test, test_register);
+    const done = new Label();
+    this.bytecodes.push(Opcode.JumpIf);
+    this.bytecodes.push(test_register);
+    this.pushLabel(done);
+    this.visitStatement(s.body);
+    this.bytecodes.push(Opcode.JumpLoop);
+    this.pushLabel(loop);
+    this.bindLabel(done);
   }
 
   visitExpression(e : Ast.Expression, destination : number) {
