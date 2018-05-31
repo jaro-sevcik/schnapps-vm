@@ -46,11 +46,12 @@ class BytecodeGenerator {
       assert.strictEqual(this.bytecodes[p], unboundLabelSentinel);
       this.bytecodes[p] = currentOffset;
     }
+    l.offset = currentOffset;
     l.patchPositions.length = 0;
   }
 
   pushLabel(l : Label) {
-    if (!l.offset) {
+    if (l.offset === undefined) {
       l.patchPositions.push(this.bytecodes.length);
       this.bytecodes.push(unboundLabelSentinel);
     } else {
@@ -141,7 +142,7 @@ class BytecodeGenerator {
     const test_register = this.allocateRegister();
     this.visitExpression(s.test, test_register);
     const done = new Label();
-    this.bytecodes.push(Opcode.JumpIf);
+    this.bytecodes.push(Opcode.JumpIfFalse);
     this.bytecodes.push(test_register);
     this.pushLabel(done);
     this.visitStatement(s.body);

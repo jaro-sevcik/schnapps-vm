@@ -77,10 +77,18 @@ export function execute(bytecodeArray : number[],
         offset = target;
         break;
       }
-      case Opcode.JumpIf: {
+      case Opcode.JumpIfTrue: {
         const condition = bytecodeArray[offset++];
         const target = bytecodeArray[offset++];
         if (registers[condition] !== 0) {
+          offset = target;
+        }
+        break;
+      }
+      case Opcode.JumpIfFalse: {
+        const condition = bytecodeArray[offset++];
+        const target = bytecodeArray[offset++];
+        if (registers[condition] === 0) {
           offset = target;
         }
         break;

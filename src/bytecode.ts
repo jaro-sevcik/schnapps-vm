@@ -12,7 +12,8 @@ export enum Opcode {
   TestLessThanOrEqual,
   Jump,
   JumpLoop,
-  JumpIf,
+  JumpIfTrue,
+  JumpIfFalse,
   Print,
 }
 
@@ -51,7 +52,8 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
            k.InputRegister);
   register(o.Jump, k.Label);
   register(o.JumpLoop, k.Label);
-  register(o.JumpIf, k.InputRegister, k.Label);
+  register(o.JumpIfTrue, k.InputRegister, k.Label);
+  register(o.JumpIfFalse, k.InputRegister, k.Label);
   register(o.Print, k.InputRegister);
 }
 
@@ -62,12 +64,13 @@ export function printBytecode(bytecodes : number[]) {
 
   let offset = 0;
   while (offset < bytecodes.length) {
+    let s = fmt(offset.toString(), 5);
+
     // Read the opcode and get the descriptor.
     const opcode = bytecodes[offset++];
     const descriptor = bytecodeDescriptors[opcode];
 
     // Print the opcode;
-    let s = fmt(offset.toString(), 5);
     s += fmt(descriptor.name, 15);
     const ops = descriptor.operands;
     let i = 0;

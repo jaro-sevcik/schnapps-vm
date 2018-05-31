@@ -94,7 +94,7 @@ test("run_print_assign", () => {
 
 test("run_while2", () => {
     const vm = new VirtualMachine();
-    const config = new TestConfig(true);
+    const config = new TestConfig(false);
     vm.execute(`var i = 0; var s = 0;
                 while (i < 10) {
                     i = i + 1;
@@ -102,5 +102,5 @@ test("run_while2", () => {
                 }
                 print(s);
                `, config);
-    expect(config.out).toBe("2");
+    expect(config.out).toBe("20");
 });
