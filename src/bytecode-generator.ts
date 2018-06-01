@@ -59,6 +59,17 @@ class BytecodeGenerator {
     }
   }
 
+  emit(sequence : Array<number | Label>) {
+    for (const b of sequence) {
+      if (b instanceof Label) {
+        this.pushLabel(b as Label);
+      } else {
+        assert.strictEqual(typeof b, "number");
+        this.bytecodes.push(b);
+      }
+    }
+  }
+
   // Rudimentary error handling.
   throwError(n : Ast.Node) {
     throw new Error("Unsupported Ast node of type " + n.type);
@@ -115,9 +126,7 @@ class BytecodeGenerator {
       this.variables.set(name, register);
     }
     // Store the initial value.
-    this.bytecodes.push(Opcode.LoadInteger);
-    this.bytecodes.push(register);
-    this.bytecodes.push(init);
+    this.emit([Opcode.LoadInteger, register, init]);
   }
 
   visitVariableDeclaration(declaration : Ast.VariableDeclaration) {
@@ -145,12 +154,9 @@ class BytecodeGenerator {
     const test_register = this.allocateRegister();
     this.visitExpression(s.test, test_register);
     const done = new Label();
-    this.bytecodes.push(Opcode.JumpIfFalse);
-    this.bytecodes.push(test_register);
-    this.pushLabel(done);
+    this.emit([Opcode.JumpIfFalse, test_register, done]);
     this.visitStatement(s.body);
-    this.bytecodes.push(Opcode.JumpLoop);
-    this.pushLabel(loop);
+    this.emit([Opcode.JumpLoop, loop]);
     this.bindLabel(done);
   }
 
@@ -159,14 +165,12 @@ class BytecodeGenerator {
     // Visit the condition.
     const test_register = this.allocateRegister();
     this.visitExpression(s.test, test_register);
-    this.bytecodes.push(Opcode.JumpIfFalse);
-    this.bytecodes.push(test_register);
-    this.pushLabel(else_label);
+    this.emit([Opcode.JumpIfFalse, test_register, else_label]);
     this.visitStatement(s.consequent);
     if (s.alternate) {
       const done_label = new Label();
-      this.bytecodes.push(Opcode.Jump);
-      this.pushLabel(done_label);
+      this.emit([Opcode.Jump, done_label]);
+
       this.bindLabel(else_label);
       this.visitStatement(s.alternate);
       this.bindLabel(done_label);
@@ -202,13 +206,12 @@ class BytecodeGenerator {
   visitVariable(id : Ast.Identifier, destination : number) {
     if (!this.variables.has(id.name)) this.throwError(id);
     const register = this.variables.get(id.name);
-    this.bytecodes.push(Opcode.Load, destination, register);
+    this.emit([Opcode.Load, destination, register]);
   }
 
   visitLiteral(literal : Ast.Literal, destination : number) {
     if (typeof literal.value !== "number") this.throwError(literal);
-    this.bytecodes.push(
-        Opcode.LoadInteger, destination, literal.value as number);
+    this.emit([Opcode.LoadInteger, destination, literal.value as number]);
   }
 
   visitCallExpression(e : Ast.CallExpression, destination : number) {
@@ -220,7 +223,7 @@ class BytecodeGenerator {
     if (e.arguments.length !== 1) this.throwError(e);
     const register = this.allocateRegister();
     this.visitExpression(e.arguments[0] as Ast.Expression, register);
-    this.bytecodes.push(Opcode.Print, register);
+    this.emit([Opcode.Print, register]);
     this.freeRegister(register);
   }
 
@@ -243,32 +246,29 @@ class BytecodeGenerator {
     // Emit bytecode for the actual operation.
     switch (e.operator) {
       case "+":
-        this.bytecodes.push(
-            Opcode.Add, destination, destination, rightRegister);
+        this.emit([Opcode.Add, destination, destination, rightRegister]);
         break;
       case "-":
-        this.bytecodes.push(
-            Opcode.Sub, destination, destination, rightRegister);
+        this.emit([Opcode.Sub, destination, destination, rightRegister]);
         break;
       case "*":
-        this.bytecodes.push(
-            Opcode.Mul, destination, destination, rightRegister);
+        this.emit([Opcode.Mul, destination, destination, rightRegister]);
         break;
       case "/":
-        this.bytecodes.push(
-            Opcode.Div, destination, destination, rightRegister);
+        this.emit([Opcode.Div, destination, destination, rightRegister]);
         break;
       case "==":
-        this.bytecodes.push(
-          Opcode.TestEqual, destination, destination, rightRegister);
+        this.emit([Opcode.TestEqual, destination, destination, rightRegister]);
         break;
       case "<":
-        this.bytecodes.push(
-          Opcode.TestLessThan, destination, destination, rightRegister);
+        this.emit(
+          [Opcode.TestLessThan, destination, destination, rightRegister]);
         break;
       case "<=":
-        this.bytecodes.push(
-          Opcode.TestLessThanOrEqual, destination, destination, rightRegister);
+        this.emit([Opcode.TestLessThanOrEqual,
+                   destination,
+                   destination,
+                   rightRegister]);
         break;
       default:
         this.throwError(e);
