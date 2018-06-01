@@ -104,3 +104,46 @@ test("run_while2", () => {
                `, config);
     expect(config.out).toBe("20");
 });
+
+test("run_while_skip", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig(false);
+    vm.execute(`var i = 0; var s = 5;
+                while (i < 0) {
+                    i = i + 1;
+                    s = s + 2;
+                }
+                print(s);
+               `, config);
+    expect(config.out).toBe("5");
+});
+
+test("run_if_true", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig(false);
+    vm.execute(`var i = 0;
+                var s = 0;
+                if (i < 10) {
+                    s = 3;
+                } else {
+                    s = 4;
+                }
+                print(s);
+               `, config);
+    expect(config.out).toBe("3");
+});
+
+test("run_if_false", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig(false);
+    vm.execute(`var i = 0;
+                var s = 0;
+                if (10 < i) {
+                    s = 3;
+                } else {
+                    s = 4;
+                }
+                print(s);
+               `, config);
+    expect(config.out).toBe("4");
+});

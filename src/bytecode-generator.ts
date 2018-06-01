@@ -88,6 +88,9 @@ class BytecodeGenerator {
       case "WhileStatement":
         this.visitWhileStatement(s as Ast.WhileStatement);
         break;
+      case "IfStatement":
+        this.visitIfStatement(s as Ast.IfStatement);
+        break;
       case "BlockStatement": {
         const b = s as Ast.BlockStatement;
         this.visitStatementList(b.body);
@@ -149,6 +152,27 @@ class BytecodeGenerator {
     this.bytecodes.push(Opcode.JumpLoop);
     this.pushLabel(loop);
     this.bindLabel(done);
+  }
+
+  visitIfStatement(s : Ast.IfStatement) {
+    const else_label = new Label();
+    // Visit the condition.
+    const test_register = this.allocateRegister();
+    this.visitExpression(s.test, test_register);
+    this.bytecodes.push(Opcode.JumpIfFalse);
+    this.bytecodes.push(test_register);
+    this.pushLabel(else_label);
+    this.visitStatement(s.consequent);
+    if (s.alternate) {
+      const done_label = new Label();
+      this.bytecodes.push(Opcode.Jump);
+      this.pushLabel(done_label);
+      this.bindLabel(else_label);
+      this.visitStatement(s.alternate);
+      this.bindLabel(done_label);
+    } else {
+      this.bindLabel(else_label);
+    }
   }
 
   visitExpression(e : Ast.Expression, destination : number) {
