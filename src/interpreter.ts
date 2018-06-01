@@ -1,9 +1,13 @@
 import { Opcode } from "./bytecode";
+import { SharedFunctionInfo } from "./function";
 
-export function execute(bytecodeArray : number[],
+export function execute(fun : SharedFunctionInfo,
+                        args : number[],
                         out : (s : string) => void) {
   let offset = 0;
-  const registers : number[] = [];
+  const registers : number[] = args;
+  const bytecodeArray = fun.bytecode.bytecodes;
+
   while (offset < bytecodeArray.length) {
     const bytecode = bytecodeArray[offset++];
     switch (bytecode) {

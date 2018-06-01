@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as Ast from "estree";
-import { Opcode } from "./bytecode";
+import { BytecodeArray, Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
 
 class Label {
@@ -20,6 +20,7 @@ class BytecodeGenerator {
   bytecodes : number[];
   variables = new Map<string, number>();
   liveRegisterCount : number;
+  maxRegisterCount : number;
 
   constructor() {
     this.bytecodes = [];
@@ -28,7 +29,9 @@ class BytecodeGenerator {
 
   // Register management. We allocate register stack machine style.
   allocateRegister() : number {
-    return this.liveRegisterCount++;
+     const reg = this.liveRegisterCount++;
+     if (reg > this.maxRegisterCount) this.maxRegisterCount = reg;
+     return reg;
   }
 
   freeRegister(register : number) {
@@ -85,9 +88,9 @@ class BytecodeGenerator {
   }
 
   // Entry point for generating bytecodes for the program.
-  visitProgram(program : Ast.Program) : number[] {
+  visitProgram(program : Ast.Program) : BytecodeArray {
     this.visitStatementList(program.body);
-    return this.bytecodes;
+    return new BytecodeArray(this.bytecodes, this.maxRegisterCount);
   }
 
   // Generate bytecodes for a list of statements.
@@ -290,6 +293,6 @@ class BytecodeGenerator {
 }
 
 // Returns the address of the function object.
-export function generate(program : Ast.Program) : number[] {
+export function generate(program : Ast.Program) : Bytecode.BytecodeArray {
   return new BytecodeGenerator().visitProgram(program);
 }

@@ -15,9 +15,28 @@ export enum Opcode {
   JumpIfTrue,
   JumpIfFalse,
   Print,
+  Time,
+  Call,
 }
 
-export enum OperandKind { OutputRegister, InputRegister, Constant, Label }
+export class BytecodeArray {
+  bytecodes : number[];
+  register_count : number;
+
+  constructor(bytecodes : number[], register_count : number) {
+    this.bytecodes = bytecodes;
+    this.register_count = register_count;
+  }
+}
+
+export enum OperandKind {
+  OutputRegister,
+  InputRegister,
+  InputRegisterRangeStart,
+  InputRegisterRangeCount,
+  Constant,
+  Label,
+}
 
 export class BytecodeDescriptor {
   name : string;
@@ -54,6 +73,10 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
   register(o.JumpLoop, k.Label);
   register(o.JumpIfTrue, k.InputRegister, k.Label);
   register(o.JumpIfFalse, k.InputRegister, k.Label);
+  register(o.Call,
+           k.OutputRegister,                                      // Retval.
+           k.InputRegister,                                       // Target.
+           k.InputRegisterRangeStart, k.InputRegisterRangeCount); // Args.
   register(o.Print, k.InputRegister);
 }
 
@@ -70,7 +93,7 @@ export function printBytecode(bytecodes : number[]) {
     const opcode = bytecodes[offset++];
     const descriptor = bytecodeDescriptors[opcode];
 
-    // Print the opcode;
+    // Print the opcode.
     s += fmt(descriptor.name, 15);
     const ops = descriptor.operands;
     let i = 0;
