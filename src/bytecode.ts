@@ -17,14 +17,14 @@ export enum Opcode {
   Print,
 }
 
-enum OperandKind { OutputRegister, InputRegister, Constant, Label }
+export enum OperandKind { OutputRegister, InputRegister, Constant, Label }
 
-class BytecodeDescriptor {
+export class BytecodeDescriptor {
   name : string;
   operands : OperandKind[];
 }
 
-const bytecodeDescriptors : BytecodeDescriptor[] = [];
+export const bytecodeDescriptors : BytecodeDescriptor[] = [];
 
 function register(opcode : Opcode, ...operands : OperandKind[]) {
   bytecodeDescriptors[opcode] = { name : Opcode[opcode], operands };

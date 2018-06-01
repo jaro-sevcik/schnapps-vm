@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as Ast from "estree";
 import { Opcode } from "./bytecode";
+import * as Bytecode from "./bytecode";
 
 class Label {
   static Bound(offset : number) : Label {
@@ -60,10 +61,18 @@ class BytecodeGenerator {
   }
 
   emit(sequence : Array<number | Label>) {
-    for (const b of sequence) {
+    const opcode = sequence[0] as number;
+    this.bytecodes.push(opcode);
+    const operandKinds = Bytecode.bytecodeDescriptors[opcode].operands;
+    assert.strictEqual(sequence.length - 1, operandKinds.length);
+    assert.notStrictEqual(Opcode[opcode], undefined);
+    for (let i = 1; i < sequence.length; i++) {
+      const b = sequence[i];
       if (b instanceof Label) {
+        assert.strictEqual(operandKinds[i - 1], Bytecode.OperandKind.Label);
         this.pushLabel(b as Label);
       } else {
+        assert.notStrictEqual(operandKinds[i - 1], Bytecode.OperandKind.Label);
         assert.strictEqual(typeof b, "number");
         this.bytecodes.push(b);
       }
