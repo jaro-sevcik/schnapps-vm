@@ -19,21 +19,12 @@ export enum Opcode {
   Call,
 }
 
-export class BytecodeArray {
-  bytecodes : number[];
-  register_count : number;
-
-  constructor(bytecodes : number[], register_count : number) {
-    this.bytecodes = bytecodes;
-    this.register_count = register_count;
-  }
-}
-
 export enum OperandKind {
   OutputRegister,
   InputRegister,
   InputRegisterRangeStart,
   InputRegisterRangeCount,
+  NumberConstant,
   Constant,
   Label,
 }
@@ -59,7 +50,7 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
 {
   const k = OperandKind;
   const o = Opcode;
-  register(o.LoadInteger, k.OutputRegister, k.Constant);
+  register(o.LoadInteger, k.OutputRegister, k.NumberConstant);
   register(o.Load, k.OutputRegister, k.InputRegister);
   register(o.Add, k.OutputRegister, k.InputRegister, k.InputRegister);
   register(o.Sub, k.OutputRegister, k.InputRegister, k.InputRegister);
@@ -75,7 +66,7 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
   register(o.JumpIfFalse, k.InputRegister, k.Label);
   register(o.Call,
            k.OutputRegister,                                      // Retval.
-           k.InputRegister,                                       // Target.
+           k.Constant,                                            // Target.
            k.InputRegisterRangeStart, k.InputRegisterRangeCount); // Args.
   register(o.Print, k.InputRegister);
 }
@@ -114,8 +105,16 @@ export function printBytecode(bytecodes : number[]) {
         isFirst = false;
         if (ops[i] === OperandKind.InputRegister) {
           s += "r" + bytecodes[offset++];
-        } else if (ops[i] === OperandKind.Constant) {
+        } else if (ops[i] === OperandKind.NumberConstant) {
           s += bytecodes[offset++];
+        } else if (ops[i] === OperandKind.Constant) {
+          s += `[${bytecodes[offset++]}]`;
+        } else if (ops[i] === OperandKind.InputRegisterRangeStart) {
+          const start = bytecodes[offset++];
+          s += "r" + start;
+          i++;
+          assert.strictEqual(ops[i], OperandKind.InputRegisterRangeCount);
+          s += ":" + (start + bytecodes[offset++] - 1);
         } else {
           assert.strictEqual(ops[i], OperandKind.Label);
           s += `+${bytecodes[offset++]}`;

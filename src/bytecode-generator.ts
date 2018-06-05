@@ -1,11 +1,14 @@
 import * as assert from "assert";
 import * as Ast from "estree";
-import { BytecodeArray, Opcode } from "./bytecode";
+import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
+import { BytecodeArray,
+         IForeignFunction,
+         SharedFunctionInfo} from "./function";
 
-class Label {
-  static Bound(offset : number) : Label {
-    const l : Label = new Label();
+class LabelOperand {
+  static Bound(offset : number) : LabelOperand {
+    const l : LabelOperand = new LabelOperand();
     l.offset = offset;
     return l;
   }
@@ -17,33 +20,51 @@ class Label {
 const unboundLabelSentinel = -123;
 
 class BytecodeGenerator {
-  bytecodes : number[];
+  bytecodes : number[] = [];
+  constants : SharedFunctionInfo[] = [];
+  external : Map<string, SharedFunctionInfo>;
   variables = new Map<string, number>();
-  liveRegisterCount : number;
-  maxRegisterCount : number;
+  liveRegisterCount : number = 0;
+  maxRegisterCount : number = 0;
 
-  constructor() {
-    this.bytecodes = [];
-    this.liveRegisterCount = 0;
+  constructor(ffi : Map<string, SharedFunctionInfo>) {
+    this.external = ffi;
   }
 
   // Register management. We allocate register stack machine style.
   allocateRegister() : number {
-     const reg = this.liveRegisterCount++;
-     if (reg > this.maxRegisterCount) this.maxRegisterCount = reg;
-     return reg;
+    return this.allocateRegisterRange(1);
   }
 
-  freeRegister(register : number) {
-    this.liveRegisterCount--;
+  allocateRegisterRange(n : number) : number {
+    const reg = this.liveRegisterCount;
+    this.liveRegisterCount += n;
+    if (this.liveRegisterCount > this.maxRegisterCount) {
+      this.maxRegisterCount = reg;
+    }
+    return reg;
+  }
+
+  freeRegisterRange(register : number, n : number) {
+    this.liveRegisterCount -= n;
     assert.strictEqual(this.liveRegisterCount, register);
   }
 
-  createLoopLabel() : Label {
-    return new Label();
+  freeRegister(register : number) {
+    return this.freeRegisterRange(register, 1);
   }
 
-  bindLabel(l : Label) {
+  createConstant(c : SharedFunctionInfo) : number {
+    const i = this.constants.length;
+    this.constants.push(c);
+    return i;
+  }
+
+  createLoopLabel() : LabelOperand {
+    return new LabelOperand();
+  }
+
+  bindLabel(l : LabelOperand) {
     assert.strictEqual(l.offset, undefined);
     const currentOffset = this.bytecodes.length;
     for (const p of l.patchPositions) {
@@ -54,7 +75,7 @@ class BytecodeGenerator {
     l.patchPositions.length = 0;
   }
 
-  pushLabel(l : Label) {
+  pushLabel(l : LabelOperand) {
     if (l.offset === undefined) {
       l.patchPositions.push(this.bytecodes.length);
       this.bytecodes.push(unboundLabelSentinel);
@@ -63,7 +84,7 @@ class BytecodeGenerator {
     }
   }
 
-  emit(sequence : Array<number | Label>) {
+  emit(sequence : Array<number | LabelOperand>) {
     const opcode = sequence[0] as number;
     this.bytecodes.push(opcode);
     const operandKinds = Bytecode.bytecodeDescriptors[opcode].operands;
@@ -71,9 +92,9 @@ class BytecodeGenerator {
     assert.notStrictEqual(Opcode[opcode], undefined);
     for (let i = 1; i < sequence.length; i++) {
       const b = sequence[i];
-      if (b instanceof Label) {
+      if (b instanceof LabelOperand) {
         assert.strictEqual(operandKinds[i - 1], Bytecode.OperandKind.Label);
-        this.pushLabel(b as Label);
+        this.pushLabel(b as LabelOperand);
       } else {
         assert.notStrictEqual(operandKinds[i - 1], Bytecode.OperandKind.Label);
         assert.strictEqual(typeof b, "number");
@@ -90,7 +111,8 @@ class BytecodeGenerator {
   // Entry point for generating bytecodes for the program.
   visitProgram(program : Ast.Program) : BytecodeArray {
     this.visitStatementList(program.body);
-    return new BytecodeArray(this.bytecodes, this.maxRegisterCount);
+    return new BytecodeArray(this.bytecodes, this.maxRegisterCount,
+                             this.constants);
   }
 
   // Generate bytecodes for a list of statements.
@@ -106,7 +128,9 @@ class BytecodeGenerator {
         break;
       case "ExpressionStatement":
         const expression = (s as Ast.ExpressionStatement).expression;
-        this.visitExpression(expression, null);
+        const dummy_result = this.allocateRegister();
+        this.visitExpression(expression, dummy_result);
+        this.freeRegister(dummy_result);
         break;
       case "WhileStatement":
         this.visitWhileStatement(s as Ast.WhileStatement);
@@ -160,12 +184,12 @@ class BytecodeGenerator {
   }
 
   visitWhileStatement(s : Ast.WhileStatement) {
-    const loop = new Label();
+    const loop = new LabelOperand();
     this.bindLabel(loop);
     // Visit the condition.
     const test_register = this.allocateRegister();
     this.visitExpression(s.test, test_register);
-    const done = new Label();
+    const done = new LabelOperand();
     this.emit([Opcode.JumpIfFalse, test_register, done]);
     this.visitStatement(s.body);
     this.emit([Opcode.JumpLoop, loop]);
@@ -173,14 +197,14 @@ class BytecodeGenerator {
   }
 
   visitIfStatement(s : Ast.IfStatement) {
-    const else_label = new Label();
+    const else_label = new LabelOperand();
     // Visit the condition.
     const test_register = this.allocateRegister();
     this.visitExpression(s.test, test_register);
     this.emit([Opcode.JumpIfFalse, test_register, else_label]);
     this.visitStatement(s.consequent);
     if (s.alternate) {
-      const done_label = new Label();
+      const done_label = new LabelOperand();
       this.emit([Opcode.Jump, done_label]);
 
       this.bindLabel(else_label);
@@ -231,12 +255,25 @@ class BytecodeGenerator {
     // Check that this is what we have here.
     if (e.callee.type !== "Identifier") this.throwError(e);
     const name = (e.callee as Ast.Identifier).name;
-    if (name !== "print") this.throwError(e);
-    if (e.arguments.length !== 1) this.throwError(e);
-    const register = this.allocateRegister();
-    this.visitExpression(e.arguments[0] as Ast.Expression, register);
-    this.emit([Opcode.Print, register]);
-    this.freeRegister(register);
+    // TODO(jarin) Should lookup in variables.
+    if (!this.external.has(name)) {
+      throw new Error(`Unknown function "${name}" (at ${e}).`);
+    }
+    const foreign = this.external.get(name);
+    if (e.arguments.length !== foreign.parameter_count) {
+      throw new Error(
+        `Param count mismatch for function "${name}" (at ${e}).`);
+    }
+    const register = this.allocateRegisterRange(foreign.parameter_count);
+    for (let i = 0; i < foreign.parameter_count; i++) {
+      this.visitExpression(e.arguments[i] as Ast.Expression, register + i);
+    }
+    this.emit([Opcode.Call,
+               destination,
+               this.createConstant(foreign),
+               register,
+               foreign.parameter_count]);
+    this.freeRegisterRange(register, foreign.parameter_count);
   }
 
   visitAssignmentExpression(e : Ast.AssignmentExpression,
@@ -293,6 +330,12 @@ class BytecodeGenerator {
 }
 
 // Returns the address of the function object.
-export function generate(program : Ast.Program) : Bytecode.BytecodeArray {
-  return new BytecodeGenerator().visitProgram(program);
+export function generate(program : Ast.Program,
+                         external : Map<string, IForeignFunction>)
+      : BytecodeArray {
+  const ffi = new Map<string, SharedFunctionInfo>();
+  for (const f of external) {
+    ffi.set(f[0], new SharedFunctionInfo(f[0], f[1], f[1].parameter_count));
+  }
+  return new BytecodeGenerator(ffi).visitProgram(program);
 }

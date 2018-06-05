@@ -1,11 +1,18 @@
+import { IForeignFunction } from "./function";
 import { IVMConfig, VirtualMachine } from "./vm";
 
 class TestConfig implements IVMConfig {
     out = "";
     printBytecode : boolean;
 
+    ffi : Map<string, IForeignFunction>;
+
     constructor(printBytecode = false) {
-        this.printBytecode = printBytecode;
+        this.ffi = new Map([
+            ["print", {
+                        fn : (a : number) => { this.out += a; return 0; },
+                        parameter_count : 1,
+                      }]]);
     }
 
     printerFunction = (s : string) => { this.out += s; };

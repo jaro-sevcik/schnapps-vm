@@ -1,105 +1,117 @@
 import { Opcode } from "./bytecode";
-import { SharedFunctionInfo } from "./function";
+import { BytecodeArray,
+         IForeignFunction,
+         SharedFunctionInfo } from "./function";
 
 export function execute(fun : SharedFunctionInfo,
-                        args : number[],
-                        out : (s : string) => void) {
+                        args : number[]) {
   let offset = 0;
   const registers : number[] = args;
-  const bytecodeArray = fun.bytecode.bytecodes;
+  const bytecode_array = fun.bytecode_or_foreign as BytecodeArray;
+  const bytecodes = bytecode_array.bytecodes;
+  const constants = bytecode_array.constants;
+  const stack = [];
 
-  while (offset < bytecodeArray.length) {
-    const bytecode = bytecodeArray[offset++];
+  while (offset < bytecodes.length) {
+    const bytecode = bytecodes[offset++];
     switch (bytecode) {
       case Opcode.LoadInteger: {
-        const register = bytecodeArray[offset++];
-        const value = bytecodeArray[offset++];
+        const register = bytecodes[offset++];
+        const value = bytecodes[offset++];
         registers[register] = value;
         break;
       }
       case Opcode.Load: {
-        const destination = bytecodeArray[offset++];
-        const source = bytecodeArray[offset++];
+        const destination = bytecodes[offset++];
+        const source = bytecodes[offset++];
         registers[destination] = registers[source];
         break;
       }
       case Opcode.Add: {
-        const result = bytecodeArray[offset++];
-        const left = bytecodeArray[offset++];
-        const right = bytecodeArray[offset++];
+        const result = bytecodes[offset++];
+        const left = bytecodes[offset++];
+        const right = bytecodes[offset++];
         registers[result] = registers[left] + registers[right];
         break;
       }
       case Opcode.Sub: {
-        const result = bytecodeArray[offset++];
-        const left = bytecodeArray[offset++];
-        const right = bytecodeArray[offset++];
+        const result = bytecodes[offset++];
+        const left = bytecodes[offset++];
+        const right = bytecodes[offset++];
         registers[result] = registers[left] - registers[right];
         break;
       }
       case Opcode.Mul: {
-        const result = bytecodeArray[offset++];
-        const left = bytecodeArray[offset++];
-        const right = bytecodeArray[offset++];
+        const result = bytecodes[offset++];
+        const left = bytecodes[offset++];
+        const right = bytecodes[offset++];
         registers[result] = registers[left] * registers[right];
         break;
       }
       case Opcode.Div: {
-        const result = bytecodeArray[offset++];
-        const left = bytecodeArray[offset++];
-        const right = bytecodeArray[offset++];
+        const result = bytecodes[offset++];
+        const left = bytecodes[offset++];
+        const right = bytecodes[offset++];
         registers[result] = registers[left] / registers[right];
         break;
       }
       case Opcode.TestEqual: {
-        const result = bytecodeArray[offset++];
-        const left = bytecodeArray[offset++];
-        const right = bytecodeArray[offset++];
+        const result = bytecodes[offset++];
+        const left = bytecodes[offset++];
+        const right = bytecodes[offset++];
         // TODO Fix to return boolean.
         registers[result] = +(registers[left] === registers[right]);
         break;
       }
       case Opcode.TestLessThan: {
-        const result = bytecodeArray[offset++];
-        const left = bytecodeArray[offset++];
-        const right = bytecodeArray[offset++];
+        const result = bytecodes[offset++];
+        const left = bytecodes[offset++];
+        const right = bytecodes[offset++];
         // TODO Fix to return boolean.
         registers[result] = +(registers[left] < registers[right]);
         break;
       }
       case Opcode.TestLessThanOrEqual: {
-        const result = bytecodeArray[offset++];
-        const left = bytecodeArray[offset++];
-        const right = bytecodeArray[offset++];
+        const result = bytecodes[offset++];
+        const left = bytecodes[offset++];
+        const right = bytecodes[offset++];
         // TODO Fix to return boolean.
         registers[result] = +(registers[left] <= registers[right]);
         break;
       }
       case Opcode.Jump:
       case Opcode.JumpLoop: {
-        const target = bytecodeArray[offset++];
+        const target = bytecodes[offset++];
         offset = target;
         break;
       }
       case Opcode.JumpIfTrue: {
-        const condition = bytecodeArray[offset++];
-        const target = bytecodeArray[offset++];
+        const condition = bytecodes[offset++];
+        const target = bytecodes[offset++];
         if (registers[condition] !== 0) {
           offset = target;
         }
         break;
       }
       case Opcode.JumpIfFalse: {
-        const condition = bytecodeArray[offset++];
-        const target = bytecodeArray[offset++];
+        const condition = bytecodes[offset++];
+        const target = bytecodes[offset++];
         if (registers[condition] === 0) {
           offset = target;
         }
         break;
       }
-      case Opcode.Print: {
-        const register = bytecodeArray[offset++];
-        out(registers[register].toString());
+      case Opcode.Call: {
+        const result = bytecodes[offset++];
+        const callee = constants[bytecodes[offset++]];
+        const args_start = bytecodes[offset++];
+        const args_count = bytecodes[offset++];
+        const foreign = callee.bytecode_or_foreign as IForeignFunction;
+        const callee_args = [];
+        for (let i = 0; i < args_count; i++) {
+          callee_args.push(registers[args_start + i]);
+        }
+        registers[result] = foreign.fn.apply(undefined, callee_args);
         break;
       }
       default:
