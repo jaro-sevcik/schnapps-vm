@@ -5,6 +5,7 @@ import * as Bytecode from "./bytecode";
 import { BytecodeArray,
          IForeignFunction,
          SharedFunctionInfo} from "./function";
+import { IVMConfig } from "./vm-config";
 
 class LabelOperand {
   static Bound(offset : number) : LabelOperand {
@@ -19,16 +20,24 @@ class LabelOperand {
 
 const unboundLabelSentinel = -123;
 
+interface IFunctionToCompile {
+  shared : SharedFunctionInfo;
+  declaration : Ast.FunctionDeclaration;
+}
+
 class BytecodeGenerator {
   bytecodes : number[] = [];
   constants : SharedFunctionInfo[] = [];
   external : Map<string, SharedFunctionInfo>;
-  variables = new Map<string, number>();
+  variables = new Map<string, number | SharedFunctionInfo>();
   liveRegisterCount : number = 0;
   maxRegisterCount : number = 0;
+  functionsToCompile : IFunctionToCompile[];
 
-  constructor(ffi : Map<string, SharedFunctionInfo>) {
+  constructor(ffi : Map<string, SharedFunctionInfo>,
+              functionsToCompile : IFunctionToCompile[]) {
     this.external = ffi;
+    this.functionsToCompile = functionsToCompile;
   }
 
   // Register management. We allocate register stack machine style.
@@ -109,10 +118,20 @@ class BytecodeGenerator {
   }
 
   // Entry point for generating bytecodes for the program.
-  visitProgram(program : Ast.Program) : BytecodeArray {
+  compileProgram(program : Ast.Program) : BytecodeArray {
     this.visitStatementList(program.body);
     return new BytecodeArray(this.bytecodes, this.maxRegisterCount,
                              this.constants);
+  }
+
+  // Entry point for generating bytecodes for a function.
+  compileFunction(f : IFunctionToCompile) : SharedFunctionInfo {
+    // TODO add the variables to the scope.
+    this.visitStatementList(f.declaration.body.body);
+    const bytecode_array = new BytecodeArray(
+        this.bytecodes, this.maxRegisterCount, this.constants);
+    f.shared.bytecode_or_foreign = bytecode_array;
+    return f.shared;
   }
 
   // Generate bytecodes for a list of statements.
@@ -125,6 +144,9 @@ class BytecodeGenerator {
     switch (s.type) {
       case "VariableDeclaration":
         this.visitVariableDeclaration(s as Ast.VariableDeclaration);
+        break;
+      case "FunctionDeclaration":
+        this.visitFunctionDeclaration(s as Ast.FunctionDeclaration);
         break;
       case "ExpressionStatement":
         const expression = (s as Ast.ExpressionStatement).expression;
@@ -143,6 +165,9 @@ class BytecodeGenerator {
         this.visitStatementList(b.body);
         break;
       }
+      case "ReturnStatement":
+        this.visitReturnStatement(s as Ast.ReturnStatement);
+        break;
       default:
         this.throwError(s);
         break;
@@ -155,7 +180,12 @@ class BytecodeGenerator {
     let register;
     if (this.variables.has(name)) {
       // If the variable name already exists, let us use it.
-      register = this.variables.get(name);
+      // TODO Remove this check as soon as we can assign functions
+      // to registers.
+      if (typeof register !== "number") {
+        throw new Error(`Variable ${name} duplicated as a function.`);
+      }
+      register = this.variables.get(name) as number;
     } else {
       // Otherwise, allocate a fresh register for the variable.
       register = this.allocateRegister();
@@ -163,6 +193,19 @@ class BytecodeGenerator {
     }
     // Store the initial value.
     this.emit([Opcode.LoadInteger, register, init]);
+  }
+
+  visitFunctionDeclaration(d : Ast.FunctionDeclaration) {
+    if (d.id.type !== "Identifier") this.throwError(d.id);
+    const id = d.id as Ast.Identifier;
+    const name = id.name;
+    if (this.variables.has(name)) {
+      // TODO this should not be an error.
+      throw new Error(`Duplicate var name ${name}`);
+    }
+    const shared = new SharedFunctionInfo(name, undefined, d.params.length);
+    this.functionsToCompile.push({ shared, declaration : d });
+    this.variables.set(name, shared);
   }
 
   visitVariableDeclaration(declaration : Ast.VariableDeclaration) {
@@ -206,13 +249,25 @@ class BytecodeGenerator {
     if (s.alternate) {
       const done_label = new LabelOperand();
       this.emit([Opcode.Jump, done_label]);
-
       this.bindLabel(else_label);
       this.visitStatement(s.alternate);
       this.bindLabel(done_label);
     } else {
       this.bindLabel(else_label);
     }
+  }
+
+  visitReturnStatement(s : Ast.ReturnStatement) {
+    // Visit the return value.
+    const value_register = this.allocateRegister();
+    if (s.argument) {
+      this.visitExpression(s.argument, value_register);
+    } else {
+      // TODO should return undefined here.
+      this.emit([Opcode.LoadInteger, value_register, 0]);
+
+    }
+    this.emit([Opcode.Return, value_register]);
   }
 
   visitExpression(e : Ast.Expression, destination : number) {
@@ -242,7 +297,10 @@ class BytecodeGenerator {
   visitVariable(id : Ast.Identifier, destination : number) {
     if (!this.variables.has(id.name)) this.throwError(id);
     const register = this.variables.get(id.name);
-    this.emit([Opcode.Load, destination, register]);
+    if (typeof register !== "number") {
+      throw new Error(`Variable ${name} duplicated as a function.`);
+    }
+    this.emit([Opcode.Load, destination, register as number]);
   }
 
   visitLiteral(literal : Ast.Literal, destination : number) {
@@ -256,24 +314,33 @@ class BytecodeGenerator {
     if (e.callee.type !== "Identifier") this.throwError(e);
     const name = (e.callee as Ast.Identifier).name;
     // TODO(jarin) Should lookup in variables.
-    if (!this.external.has(name)) {
+    let target;
+    if (this.external.has(name)) {
+      target = this.external.get(name);
+    } else if (this.variables.has(name)) {
+      const target_var = this.variables.get(name);
+      if (target_var instanceof SharedFunctionInfo) {
+        target = target_var as SharedFunctionInfo;
+      } else {
+        throw new Error(`Unknown function "${name}" (at ${e}).`);
+      }
+    } else {
       throw new Error(`Unknown function "${name}" (at ${e}).`);
     }
-    const foreign = this.external.get(name);
-    if (e.arguments.length !== foreign.parameter_count) {
+    if (e.arguments.length !== target.parameter_count) {
       throw new Error(
         `Param count mismatch for function "${name}" (at ${e}).`);
     }
-    const register = this.allocateRegisterRange(foreign.parameter_count);
-    for (let i = 0; i < foreign.parameter_count; i++) {
+    const register = this.allocateRegisterRange(target.parameter_count);
+    for (let i = 0; i < target.parameter_count; i++) {
       this.visitExpression(e.arguments[i] as Ast.Expression, register + i);
     }
     this.emit([Opcode.Call,
                destination,
-               this.createConstant(foreign),
+               this.createConstant(target),
                register,
-               foreign.parameter_count]);
-    this.freeRegisterRange(register, foreign.parameter_count);
+               target.parameter_count]);
+    this.freeRegisterRange(register, target.parameter_count);
   }
 
   visitAssignmentExpression(e : Ast.AssignmentExpression,
@@ -283,6 +350,9 @@ class BytecodeGenerator {
     const id = e.left as Ast.Identifier;
     if (!this.variables.has(id.name)) this.throwError(e);
     const register = this.variables.get(id.name);
+    if (typeof register !== "number") {
+      throw new Error(`Cannot assign to function ${name}.`);
+    }
     this.visitExpression(e.right, register);
   }
 
@@ -331,11 +401,26 @@ class BytecodeGenerator {
 
 // Returns the address of the function object.
 export function generate(program : Ast.Program,
-                         external : Map<string, IForeignFunction>)
+                         config : IVMConfig)
+           //                       external : Map<string, IForeignFunction>)
       : BytecodeArray {
   const ffi = new Map<string, SharedFunctionInfo>();
-  for (const f of external) {
+  for (const f of config.ffi) {
     ffi.set(f[0], new SharedFunctionInfo(f[0], f[1], f[1].parameter_count));
   }
-  return new BytecodeGenerator(ffi).visitProgram(program);
+  const functions : IFunctionToCompile[] = [];
+  const result = new BytecodeGenerator(ffi, functions).compileProgram(program);
+  if (config.printBytecode) {
+    Bytecode.printBytecode(result.bytecodes);
+  }
+
+  while (functions.length > 0) {
+    const generator = new BytecodeGenerator(ffi, functions);
+    const f = generator.compileFunction(functions.pop());
+    if (config.printBytecode) {
+      const fun_bytecode = f.bytecode_or_foreign as BytecodeArray;
+      Bytecode.printBytecode(fun_bytecode.bytecodes);
+    }
+  }
+  return result;
 }

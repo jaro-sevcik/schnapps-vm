@@ -17,6 +17,7 @@ export enum Opcode {
   Print,
   Time,
   Call,
+  Return,
 }
 
 export enum OperandKind {
@@ -38,13 +39,6 @@ export const bytecodeDescriptors : BytecodeDescriptor[] = [];
 
 function register(opcode : Opcode, ...operands : OperandKind[]) {
   bytecodeDescriptors[opcode] = { name : Opcode[opcode], operands };
-  let lastSeenKind = OperandKind.OutputRegister;
-  for (const kind of operands) {
-    if (kind < lastSeenKind) {
-      console.error("Arguments not ordered for bytecode " + Opcode[opcode]);
-    }
-    lastSeenKind = kind;
-  }
 }
 
 {
@@ -69,6 +63,7 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
            k.Constant,                                            // Target.
            k.InputRegisterRangeStart, k.InputRegisterRangeCount); // Args.
   register(o.Print, k.InputRegister);
+  register(o.Return, k.InputRegister);
 }
 
 export function printBytecode(bytecodes : number[]) {

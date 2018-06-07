@@ -3,11 +3,7 @@ import { printBytecode } from "./bytecode";
 import * as BytecodeGenerator from "./bytecode-generator";
 import { IForeignFunction, SharedFunctionInfo } from "./function";
 import * as Interpreter from "./interpreter";
-
-export interface IVMConfig {
-  printBytecode : boolean;
-  ffi : Map<string, IForeignFunction>;
-}
+import { IVMConfig } from "./vm-config";
 
 const defaultConfig : IVMConfig = {
   printBytecode : false,
@@ -22,11 +18,7 @@ export class VirtualMachine {
 
   execute(code : string, config : IVMConfig = defaultConfig) {
     const ast = Parser.parse(code);
-    const bytecode_array = BytecodeGenerator.generate(ast, config.ffi);
-    if (config.printBytecode) {
-      console.log("==================================");
-      printBytecode(bytecode_array.bytecodes);
-    }
+    const bytecode_array = BytecodeGenerator.generate(ast, config);
     const s = new SharedFunctionInfo("<top-level>", bytecode_array, 0);
     Interpreter.execute(s, []);
   }

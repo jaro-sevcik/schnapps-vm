@@ -1,5 +1,6 @@
 import { IForeignFunction } from "./function";
-import { IVMConfig, VirtualMachine } from "./vm";
+import { VirtualMachine } from "./vm";
+import { IVMConfig } from "./vm-config";
 
 class TestConfig implements IVMConfig {
     out = "";
@@ -154,3 +155,33 @@ test("run_if_false", () => {
                `, config);
     expect(config.out).toBe("4");
 });
+
+test("run_fun_call", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig(false);
+    vm.execute(`function f() { return 1; }
+                print(1 + f());
+               `, config);
+    expect(config.out).toBe("2");
+});
+
+// test("run_fun_call_arg1", () => {
+//     const vm = new VirtualMachine();
+//     const config = new TestConfig(false);
+//     vm.execute(`function f(x) { return 1 + x; }
+//                 print(1 + f(1));
+//                `, config);
+//     expect(config.out).toBe("3");
+// });
+
+// test("run_fun_call_rec", () => {
+//     const vm = new VirtualMachine();
+//     const config = new TestConfig(false);
+//     vm.execute(`function f(i, a) {
+//                   if (i == 0) return a;
+//                   f(i - 1, a + 2);
+//                 }
+//                 print(1 + f(5));
+//                `, config);
+//     expect(config.out).toBe("11");
+// });
