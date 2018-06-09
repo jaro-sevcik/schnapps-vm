@@ -5,11 +5,9 @@ import { BytecodeArray,
          SharedFunctionInfo } from "./function";
 
 interface IStackEntry {
-  arguments : number[];
-  registers : number[];
+  values : number[];
   pc : number;
-  bytecodes : number[];
-  constants : SharedFunctionInfo[];
+  bytecode_array : BytecodeArray;
   result_reg : number;
 }
 
@@ -17,19 +15,24 @@ export function execute(fun : SharedFunctionInfo,
                         args : number[]) {
   let pc = 0;
   let bytecode_array = fun.bytecode_or_foreign as BytecodeArray;
-  let registers : number[] = new Array(bytecode_array.register_count);
+  let values : number[] =
+      new Array(fun.parameter_count +  bytecode_array.register_count);
   let bytecodes = bytecode_array.bytecodes;
   let constants = bytecode_array.constants;
   const stack : IStackEntry[] = [];
 
   function setRegister(i : number, value : number) {
-    assert.ok(i < registers.length);
-    registers[i] = value;
+    assert.ok(i < bytecode_array.register_count);
+    i += values.length - bytecode_array.register_count;
+    assert.ok(i >= 0);
+    values[i] = value;
   }
 
   function getRegister(i : number) : number {
-    assert.ok(i < registers.length);
-    return registers[i];
+    assert.ok(i < bytecode_array.register_count);
+    i += values.length - bytecode_array.register_count;
+    assert.ok(i >= 0);
+    return values[i];
   }
 
   while (pc < bytecodes.length) {
@@ -127,20 +130,26 @@ export function execute(fun : SharedFunctionInfo,
         const args_start = bytecodes[pc++];
         const args_count = bytecodes[pc++];
         if (callee.bytecode_or_foreign instanceof BytecodeArray) {
-          bytecode_array = callee.bytecode_or_foreign as BytecodeArray;
+          // Push current frame.
           stack.push({
-            arguments : args,
-            registers,
+            values,
             pc,
-            bytecodes,
-            constants,
+            bytecode_array,
             result_reg : result,
           });
-          args = [];
+          assert.strictEqual(args_count, callee.parameter_count);
+          // Copy out the arguments to the new frame.
+          const new_values = [];
           for (let i = 0; i < args_count; i++) {
-            args.push(getRegister(args_start + i));
+            new_values.push(getRegister(args_start + i));
           }
-          registers = new Array(bytecode_array.register_count);
+          // Initialize registers in the new frame.
+          bytecode_array = callee.bytecode_or_foreign as BytecodeArray;
+          for (let i = 0; i < bytecode_array.register_count; i++) {
+            new_values.push(0);
+          }
+          // Set the new frame as current frame.
+          values = new_values;
           bytecodes = bytecode_array.bytecodes;
           constants = bytecode_array.constants;
           pc = 0;
@@ -157,12 +166,12 @@ export function execute(fun : SharedFunctionInfo,
       case Opcode.Return: {
         const value = getRegister(bytecodes[pc++]);
         const top = stack.pop();
-        args = top.arguments;
-        registers = top.registers;
-        bytecodes = top.bytecodes;
-        constants = top.constants;
+        values = top.values;
+        bytecode_array = top.bytecode_array;
+        bytecodes = bytecode_array.bytecodes;
+        constants = bytecode_array.constants;
         pc = top.pc;
-        registers[top.result_reg] = value;
+        setRegister(top.result_reg, value);
         break;
       }
       default:
