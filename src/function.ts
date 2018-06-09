@@ -1,3 +1,5 @@
+import { printBytecode } from "./bytecode";
+
 export class BytecodeArray {
   bytecodes : number[];
   constants : SharedFunctionInfo[];
@@ -9,6 +11,12 @@ export class BytecodeArray {
     this.register_count = register_count;
     this.constants = constants;
   }
+}
+
+export function printBytecodeArray(a : BytecodeArray) {
+    console.log(`  Register count: ${a.register_count}`);
+    printBytecode(a.bytecodes);
+    // TODO Print constants.
 }
 
 export interface IForeignFunction {
@@ -27,5 +35,14 @@ export class SharedFunctionInfo {
       this.name = name;
       this.bytecode_or_foreign = bytecode_or_foreign;
       this.parameter_count = parameter_count;
+    }
+}
+
+export function printSharedFunctionInfo(f : SharedFunctionInfo) {
+    console.log(`Function ${f.name} (param count ${f.parameter_count}):`);
+    if (f.bytecode_or_foreign instanceof BytecodeArray) {
+        printBytecodeArray(f.bytecode_or_foreign);
+    } else {
+        console.log("   <native>");
     }
 }

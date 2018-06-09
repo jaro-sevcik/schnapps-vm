@@ -73,7 +73,7 @@ export function printBytecode(bytecodes : number[]) {
 
   let offset = 0;
   while (offset < bytecodes.length) {
-    let s = fmt(offset.toString(), 5);
+    let s = "    " + fmt(offset.toString(), 5);
 
     // Read the opcode and get the descriptor.
     const opcode = bytecodes[offset++];
@@ -84,12 +84,20 @@ export function printBytecode(bytecodes : number[]) {
     const ops = descriptor.operands;
     let i = 0;
 
+    function regName(r : number) : string {
+      if (r >= 0) {
+        return `r${r}`;
+      } else {
+        return `a${- r - 1}`;
+      }
+    }
+
     // Print output registers.
     let isFirst = true;
     for  (; i < ops.length && ops[i] === OperandKind.OutputRegister; i++) {
       if (!isFirst) s += ", ";
       isFirst = false;
-      s += "r" + bytecodes[offset++];
+      s += regName(bytecodes[offset++]);
     }
 
     // Print input registers and constants (if there are any).
@@ -99,17 +107,21 @@ export function printBytecode(bytecodes : number[]) {
         if (!isFirst) s += ", ";
         isFirst = false;
         if (ops[i] === OperandKind.InputRegister) {
-          s += "r" + bytecodes[offset++];
+          s += regName(bytecodes[offset++]);
         } else if (ops[i] === OperandKind.NumberConstant) {
           s += bytecodes[offset++];
         } else if (ops[i] === OperandKind.Constant) {
           s += `[${bytecodes[offset++]}]`;
         } else if (ops[i] === OperandKind.InputRegisterRangeStart) {
           const start = bytecodes[offset++];
-          s += "r" + start;
+          const count = bytecodes[offset++];
           i++;
           assert.strictEqual(ops[i], OperandKind.InputRegisterRangeCount);
-          s += ":" + (start + bytecodes[offset++] - 1);
+          if (count === 0) {
+            s += "--";
+          } else {
+            s += `r${start}:${start + count - 1}`;
+          }
         } else {
           assert.strictEqual(ops[i], OperandKind.Label);
           s += `+${bytecodes[offset++]}`;

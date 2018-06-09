@@ -4,7 +4,9 @@ import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
 import { BytecodeArray,
          IForeignFunction,
-         SharedFunctionInfo} from "./function";
+         printBytecodeArray,
+         printSharedFunctionInfo,
+         SharedFunctionInfo } from "./function";
 import { IVMConfig } from "./vm-config";
 
 class LabelOperand {
@@ -419,24 +421,30 @@ class BytecodeGenerator {
 // Returns the address of the function object.
 export function generate(program : Ast.Program,
                          config : IVMConfig)
-           //                       external : Map<string, IForeignFunction>)
       : BytecodeArray {
+  // Turn the ffi functions to SharedFunctionInfos.
   const ffi = new Map<string, SharedFunctionInfo>();
   for (const f of config.ffi) {
     ffi.set(f[0], new SharedFunctionInfo(f[0], f[1], f[1].parameter_count));
   }
+
   const functions : IFunctionToCompile[] = [];
-  const result = new BytecodeGenerator(ffi, functions).compileProgram(program);
+
+  // Compile the top level code.
+  const toplevel_generator = new BytecodeGenerator(ffi, functions);
+  const result = toplevel_generator.compileProgram(program);
   if (config.printBytecode) {
-    Bytecode.printBytecode(result.bytecodes);
+    console.log("Top level code:");
+    printBytecodeArray(result);
   }
 
+  // Compiler inner functions.
   while (functions.length > 0) {
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());
     if (config.printBytecode) {
       const fun_bytecode = f.bytecode_or_foreign as BytecodeArray;
-      Bytecode.printBytecode(fun_bytecode.bytecodes);
+      printSharedFunctionInfo(f);
     }
   }
   return result;

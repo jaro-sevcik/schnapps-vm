@@ -174,6 +174,15 @@ test("run_fun_call_arg1", () => {
     expect(config.out).toBe("3");
 });
 
+test("run_fun_call_arg2", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig(false);
+    vm.execute(`function f(x, y) { return x - y; }
+                print(1 + f(43, 3));
+               `, config);
+    expect(config.out).toBe("41");
+});
+
 // test("run_fun_call_rec", () => {
 //     const vm = new VirtualMachine();
 //     const config = new TestConfig(false);
@@ -181,7 +190,7 @@ test("run_fun_call_arg1", () => {
 //                   if (i == 0) return a;
 //                   f(i - 1, a + 2);
 //                 }
-//                 print(1 + f(5));
+//                 print(1 + f(5, 0));
 //                `, config);
 //     expect(config.out).toBe("11");
 // });

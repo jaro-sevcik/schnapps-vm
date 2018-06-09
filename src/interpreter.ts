@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { Opcode, printBytecode } from "./bytecode";
+import { Opcode } from "./bytecode";
 import { BytecodeArray,
          IForeignFunction,
          SharedFunctionInfo } from "./function";
@@ -140,7 +140,7 @@ export function execute(fun : SharedFunctionInfo,
           assert.strictEqual(args_count, callee.parameter_count);
           // Copy out the arguments to the new frame.
           const new_values = [];
-          for (let i = 0; i < args_count; i++) {
+          for (let i = args_count - 1; i >= 0; --i) {
             new_values.push(getRegister(args_start + i));
           }
           // Initialize registers in the new frame.
