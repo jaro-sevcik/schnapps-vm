@@ -165,14 +165,14 @@ test("run_fun_call", () => {
     expect(config.out).toBe("2");
 });
 
-// test("run_fun_call_arg1", () => {
-//     const vm = new VirtualMachine();
-//     const config = new TestConfig(false);
-//     vm.execute(`function f(x) { return 1 + x; }
-//                 print(1 + f(1));
-//                `, config);
-//     expect(config.out).toBe("3");
-// });
+test("run_fun_call_arg1", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig(false);
+    vm.execute(`function f(x) { return 1 + x; }
+                print(1 + f(1));
+               `, config);
+    expect(config.out).toBe("3");
+});
 
 // test("run_fun_call_rec", () => {
 //     const vm = new VirtualMachine();

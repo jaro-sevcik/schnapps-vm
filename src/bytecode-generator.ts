@@ -49,7 +49,7 @@ class BytecodeGenerator {
     const reg = this.liveRegisterCount;
     this.liveRegisterCount += n;
     if (this.liveRegisterCount > this.maxRegisterCount) {
-      this.maxRegisterCount = reg;
+      this.maxRegisterCount = this.liveRegisterCount;
     }
     return reg;
   }
@@ -113,8 +113,12 @@ class BytecodeGenerator {
   }
 
   // Rudimentary error handling.
-  throwError(n : Ast.Node) {
-    throw new Error("Unsupported Ast node of type " + n.type);
+  throwError(n : Ast.Node, s? : string) : never {
+    if (s) {
+      throw new Error(`${n.loc}: ${s}`);
+    } else {
+      throw new Error("Unsupported Ast node of type " + n.type);
+    }
   }
 
   // Entry point for generating bytecodes for the program.
@@ -127,6 +131,7 @@ class BytecodeGenerator {
   // Entry point for generating bytecodes for a function.
   compileFunction(f : IFunctionToCompile) : SharedFunctionInfo {
     // TODO add the variables to the scope.
+    this.defineArguments(f.declaration.params);
     this.visitStatementList(f.declaration.body.body);
     const bytecode_array = new BytecodeArray(
         this.bytecodes, this.maxRegisterCount, this.constants);
@@ -174,16 +179,27 @@ class BytecodeGenerator {
     }
   }
 
+  defineArguments(params : Ast.Pattern[]) {
+    for (let i = 0; i < params.length; i++) {
+      if (params[i].type !== "Identifier") {
+        this.throwError(params[i],
+          `Non-identifier parameters not supported.`);
+      }
+      const p = params[i] as Ast.Identifier;
+      this.variables.set(p.name, -1 - i);
+    }
+  }
+
   // Helper for defining variables. It allocates a register for the
   // variable, and then it stores the initial value there.
-  defineVariable(name : string, init : number) {
+  defineVariable(n : Ast.Node, name : string, init : number) {
     let register;
     if (this.variables.has(name)) {
       // If the variable name already exists, let us use it.
       // TODO Remove this check as soon as we can assign functions
       // to registers.
       if (typeof register !== "number") {
-        throw new Error(`Variable ${name} duplicated as a function.`);
+        this.throwError(n, `Variable ${name} duplicated as a function.`);
       }
       register = this.variables.get(name) as number;
     } else {
@@ -201,7 +217,7 @@ class BytecodeGenerator {
     const name = id.name;
     if (this.variables.has(name)) {
       // TODO this should not be an error.
-      throw new Error(`Duplicate var name ${name}`);
+      this.throwError(d, `Duplicate var name ${name}`);
     }
     const shared = new SharedFunctionInfo(name, undefined, d.params.length);
     this.functionsToCompile.push({ shared, declaration : d });
@@ -222,7 +238,7 @@ class BytecodeGenerator {
       if (d.init.type !== "Literal") this.throwError(d.init);
       const init = d.init as Ast.Literal;
       if (typeof init.value !== "number") this.throwError(init);
-      this.defineVariable(id.name, init.value as number);
+      this.defineVariable(id, id.name, init.value as number);
     }
   }
 
@@ -298,7 +314,8 @@ class BytecodeGenerator {
     if (!this.variables.has(id.name)) this.throwError(id);
     const register = this.variables.get(id.name);
     if (typeof register !== "number") {
-      throw new Error(`Variable ${name} duplicated as a function.`);
+      // TODO Should not be an error.
+      this.throwError(id, `Variable ${name} duplicated as a function.`);
     }
     this.emit([Opcode.Load, destination, register as number]);
   }
@@ -322,14 +339,14 @@ class BytecodeGenerator {
       if (target_var instanceof SharedFunctionInfo) {
         target = target_var as SharedFunctionInfo;
       } else {
-        throw new Error(`Unknown function "${name}" (at ${e}).`);
+        this.throwError(e, `Unknown function "${name}".`);
       }
     } else {
-      throw new Error(`Unknown function "${name}" (at ${e}).`);
+      this.throwError(e, `Unknown function "${name}".`);
     }
     if (e.arguments.length !== target.parameter_count) {
-      throw new Error(
-        `Param count mismatch for function "${name}" (at ${e}).`);
+      this.throwError(e,
+        `Param count mismatch for function "${name}".`);
     }
     const register = this.allocateRegisterRange(target.parameter_count);
     for (let i = 0; i < target.parameter_count; i++) {
@@ -351,9 +368,9 @@ class BytecodeGenerator {
     if (!this.variables.has(id.name)) this.throwError(e);
     const register = this.variables.get(id.name);
     if (typeof register !== "number") {
-      throw new Error(`Cannot assign to function ${name}.`);
+      this.throwError(e, `Cannot assign to function ${name}.`);
     }
-    this.visitExpression(e.right, register);
+    this.visitExpression(e.right, register as number);
   }
 
   visitBinaryExpression(e : Ast.BinaryExpression, destination : number) {
