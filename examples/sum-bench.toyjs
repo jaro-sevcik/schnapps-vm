@@ -1,0 +1,14 @@
+function f(n) {
+    var s = 0;
+    while (0 < n) {
+        n = n - 1;
+        s = s + 2;
+    }
+    return s;
+}
+
+f(1000);
+f(1000);
+var start = time();
+f(1e7);
+print(time() - start);

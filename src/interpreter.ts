@@ -35,6 +35,11 @@ export function execute(fun : SharedFunctionInfo,
     return values[i];
   }
 
+  function jumpTo(new_pc : number) {
+    bytecode_array.profile_counter += pc - new_pc;
+    pc = new_pc;
+  }
+
   while (pc < bytecodes.length) {
     const bytecode = bytecodes[pc++];
     switch (bytecode) {
@@ -105,14 +110,14 @@ export function execute(fun : SharedFunctionInfo,
       case Opcode.Jump:
       case Opcode.JumpLoop: {
         const target = bytecodes[pc++];
-        pc = target;
+        jumpTo(target);
         break;
       }
       case Opcode.JumpIfTrue: {
         const condition = bytecodes[pc++];
         const target = bytecodes[pc++];
         if (getRegister(condition) !== 0) {
-          pc = target;
+          jumpTo(target);
         }
         break;
       }
@@ -120,7 +125,7 @@ export function execute(fun : SharedFunctionInfo,
         const condition = bytecodes[pc++];
         const target = bytecodes[pc++];
         if (getRegister(condition) === 0) {
-          pc = target;
+          jumpTo(target);
         }
         break;
       }
@@ -171,6 +176,7 @@ export function execute(fun : SharedFunctionInfo,
         bytecodes = bytecode_array.bytecodes;
         constants = bytecode_array.constants;
         pc = top.pc;
+        bytecode_array.profile_counter += pc;
         setRegister(top.result_reg, value);
         break;
       }

@@ -3,13 +3,19 @@ import * as process from "process";
 import { VirtualMachine } from "./vm";
 import { IVMConfig } from "./vm-config";
 
+// tslint:disable-next-line:no-var-requires
+require("source-map-support").install();
+
 const config : IVMConfig = {
   printBytecode : false,
   ffi : new Map([
     ["print", {
-                fn : (a : number) => { console.log(a); return 0; },
-                parameter_count : 1,
-              }]]),
+      fn : (a : number) => { console.log(a); return 0; },
+      parameter_count : 1 }],
+    ["time", {
+        fn : () => Date.now(),
+        parameter_count : 0 }],
+    ]),
 };
 
 let file : string | undefined;

@@ -4,6 +4,7 @@ export class BytecodeArray {
   bytecodes : number[];
   constants : SharedFunctionInfo[];
   register_count : number;
+  profile_counter : number = 0;
 
   constructor(bytecodes : number[], register_count : number,
               constants : SharedFunctionInfo[]) {

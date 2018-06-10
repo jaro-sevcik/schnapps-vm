@@ -116,11 +116,8 @@ class BytecodeGenerator {
 
   // Rudimentary error handling.
   throwError(n : Ast.Node, s? : string) : never {
-    if (s) {
-      throw new Error(`${n.loc}: ${s}`);
-    } else {
-      throw new Error("Unsupported Ast node of type " + n.type);
-    }
+    if (!s) s = "Unsupported Ast node of type " + n.type;
+    throw new Error(`${n.loc.start.line}:${n.loc.start.column}: ${s}`);
   }
 
   // Entry point for generating bytecodes for the program.
@@ -194,7 +191,7 @@ class BytecodeGenerator {
 
   // Helper for defining variables. It allocates a register for the
   // variable, and then it stores the initial value there.
-  defineVariable(n : Ast.Node, name : string, init : number) {
+  defineVariable(n : Ast.Node, name : string) : number {
     let register;
     if (this.variables.has(name)) {
       // If the variable name already exists, let us use it.
@@ -209,8 +206,7 @@ class BytecodeGenerator {
       register = this.allocateRegister();
       this.variables.set(name, register);
     }
-    // Store the initial value.
-    this.emit([Opcode.LoadInteger, register, init]);
+    return register;
   }
 
   visitFunctionDeclaration(d : Ast.FunctionDeclaration) {
@@ -237,10 +233,9 @@ class BytecodeGenerator {
       if (d.type !== "VariableDeclarator") this.throwError(d);
       if (d.id.type !== "Identifier") this.throwError(d.id);
       const id = d.id as Ast.Identifier;
-      if (d.init.type !== "Literal") this.throwError(d.init);
-      const init = d.init as Ast.Literal;
-      if (typeof init.value !== "number") this.throwError(init);
-      this.defineVariable(id, id.name, init.value as number);
+      const register = this.defineVariable(id, id.name);
+      // If init is not defined, we should store 'undefined'.
+      this.visitExpression(d.init, register);
     }
   }
 
