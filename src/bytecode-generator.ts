@@ -32,8 +32,10 @@ class BytecodeGenerator {
   constants : SharedFunctionInfo[] = [];
   external : Map<string, SharedFunctionInfo>;
   variables = new Map<string, number | SharedFunctionInfo>();
-  liveRegisterCount : number = 0;
-  maxRegisterCount : number = 0;
+  // Register 0 is reserved for caller frame pointer,
+  // Register 1 is reserved for shared function info.
+  liveRegisterCount : number = 2;
+  maxRegisterCount : number = 2;
   functionsToCompile : IFunctionToCompile[];
 
   constructor(ffi : Map<string, SharedFunctionInfo>,
@@ -185,6 +187,8 @@ class BytecodeGenerator {
           `Non-identifier parameters not supported.`);
       }
       const p = params[i] as Ast.Identifier;
+      // Argument 0 lives at -1,
+      // Argument 1 at -2, etc.
       this.variables.set(p.name, -1 - i);
     }
   }

@@ -35,6 +35,8 @@ export class BytecodeDescriptor {
   operands : OperandKind[];
 }
 
+export const fixedSlotCount : number = 2;
+
 export const bytecodeDescriptors : BytecodeDescriptor[] = [];
 
 function register(opcode : Opcode, ...operands : OperandKind[]) {

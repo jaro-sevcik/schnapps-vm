@@ -14,6 +14,7 @@ class TestConfig implements IVMConfig {
                         fn : (a : number) => { this.out += a; return 0; },
                         parameter_count : 1,
                       }]]);
+        this.printBytecode = printBytecode;
     }
 
     printerFunction = (s : string) => { this.out += s; };
