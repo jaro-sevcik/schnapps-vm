@@ -12,20 +12,17 @@ interface IStackEntry {
   result_reg : number;
 }
 
-export function execute(fun : SharedFunctionInfo,
-                        args : number[]) {
+export function execute(stack : Array<number | SharedFunctionInfo>,
+                        frame_ptr : number, fun : SharedFunctionInfo) : number {
   let pc = 0;
-  let shared = fun;
-  let bytecode_array = shared.bytecode_or_foreign as BytecodeArray;
-  let bytecodes = bytecode_array.bytecodes;
-  let constants = bytecode_array.constants;
-  const stack : Array<number | SharedFunctionInfo> = [];
-  let frame_ptr : number = 0;
-  stack[0] = -1;  // Frame pointer.
-  stack[1] = shared;
+  const shared = fun;
+  const bytecode_array = shared.bytecode_or_foreign as BytecodeArray;
+  const bytecodes = bytecode_array.bytecodes;
+  const constants = bytecode_array.constants;
+  stack[frame_ptr + 1] = shared;
   for (let i = Bytecode.fixedSlotCount;
        i < bytecode_array.register_count; i++) {
-    stack[i] = 0;
+    stack[frame_ptr - 1 + i] = 0;
   }
 
   function setRegister(i : number, value : number) {
@@ -135,63 +132,35 @@ export function execute(fun : SharedFunctionInfo,
         break;
       }
       case Opcode.Call: {
-        const result = bytecodes[pc++];
+        const result_reg = bytecodes[pc++];
         const callee = constants[bytecodes[pc++]];
         const args_start = bytecodes[pc++];
         const args_count = bytecodes[pc++];
         if (callee.bytecode_or_foreign instanceof BytecodeArray) {
           // Push current frame.
           let stack_top = frame_ptr + bytecode_array.register_count;
-          stack[stack_top++] = result;
-          stack[stack_top++] = pc;
           assert.strictEqual(args_count, callee.parameter_count);
           // Push the arguments to the new frame.
           for (let i = args_count - 1; i >= 0; --i) {
             stack[stack_top++] = getRegister(args_start + i);
           }
-          // Push the frame pointer and update the current frame pointer.
-          stack[stack_top] = frame_ptr;
-          frame_ptr = stack_top;
-          stack_top++;
-          // Push the function.
-          // TODO Fix once we have tagging.
-          stack[stack_top++] = shared;
-          // Set the exec state to the new function.
-          shared = callee;
-          bytecode_array = callee.bytecode_or_foreign as BytecodeArray;
-          bytecodes = bytecode_array.bytecodes;
-          constants = bytecode_array.constants;
-          pc = 0;
-          // Initialize registers in the new frame.
-          // TODO This is not really necessary, perhaps remove?.
-          for (let i = 0; i < bytecode_array.register_count; i++) {
-            stack[stack_top++] = 0;
-          }
+          stack[stack_top] = frame_ptr;  // Frame pointer.
+          const result = execute(stack, stack_top, callee);
+          setRegister(result_reg, result);
         } else {
           const foreign = callee.bytecode_or_foreign as IForeignFunction;
           const callee_args = [];
           for (let i = 0; i < args_count; i++) {
             callee_args.push(getRegister(args_start + i));
           }
-          setRegister(result, foreign.fn.apply(undefined, callee_args));
+          setRegister(result_reg, foreign.fn.apply(undefined, callee_args));
         }
         break;
       }
       case Opcode.Return: {
         const value = getRegister(bytecodes[pc++]);
-        let stack_top = frame_ptr - shared.parameter_count;
-        const caller_frame = stack[frame_ptr] as number;
-        const caller_pc = stack[--stack_top] as number;
-        const result_reg = stack[--stack_top] as number;
-        shared = stack[caller_frame + 1] as SharedFunctionInfo;
-        bytecode_array = shared.bytecode_or_foreign as BytecodeArray;
-        bytecodes = bytecode_array.bytecodes;
-        constants = bytecode_array.constants;
-        pc = caller_pc;
-        frame_ptr = caller_frame;
         bytecode_array.profile_counter += pc;
-        setRegister(result_reg, value);
-        break;
+        return value;
       }
       default:
         console.error("Unknown bytecode " + bytecode + " at " + (pc - 1));
