@@ -12,14 +12,14 @@ interface IStackEntry {
   result_reg : number;
 }
 
-export function execute(stack : Array<number | SharedFunctionInfo>,
-                        frame_ptr : number, fun : SharedFunctionInfo) : number {
+export function execute(stack : Float64Array,
+                        frame_ptr : number,
+                        shared : SharedFunctionInfo) : number {
   let pc = 0;
-  const shared = fun;
   const bytecode_array = shared.bytecode_or_foreign as BytecodeArray;
   const bytecodes = bytecode_array.bytecodes;
   const constants = bytecode_array.constants;
-  stack[frame_ptr + 1] = shared;
+  stack[frame_ptr + 1] = 0;  // Reserved for function.
   for (let i = Bytecode.fixedSlotCount;
        i < bytecode_array.register_count; i++) {
     stack[frame_ptr - 1 + i] = 0;

@@ -34,8 +34,8 @@ class BytecodeGenerator {
   variables = new Map<string, number | SharedFunctionInfo>();
   // Register 0 is reserved for caller frame pointer,
   // Register 1 is reserved for shared function info.
-  liveRegisterCount : number = 2;
-  maxRegisterCount : number = 2;
+  liveRegisterCount : number = Bytecode.fixedSlotCount;
+  maxRegisterCount : number = Bytecode.fixedSlotCount;
   functionsToCompile : IFunctionToCompile[];
 
   constructor(ffi : Map<string, SharedFunctionInfo>,
