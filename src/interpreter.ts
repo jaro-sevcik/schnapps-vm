@@ -5,13 +5,6 @@ import { BytecodeArray,
          IForeignFunction,
          SharedFunctionInfo } from "./function";
 
-interface IStackEntry {
-  values : number[];
-  pc : number;
-  bytecode_array : BytecodeArray;
-  result_reg : number;
-}
-
 export function execute(stack : Float64Array,
                         frame_ptr : number,
                         shared : SharedFunctionInfo) : number {
