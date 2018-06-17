@@ -17,9 +17,11 @@ export class VirtualMachine {
 
   execute(code : string, config : IVMConfig = defaultConfig) {
     const ast = Parser.parse(code, { loc: true });
-    const bytecode_array = BytecodeGenerator.generate(ast, config);
+    const memory = new ArrayBuffer(1e7);
+    const stack = new Float64Array(memory);
+    const bytecode_array =
+        BytecodeGenerator.generate(ast, memory, config);
     const shared = new SharedFunctionInfo("<top-level>", bytecode_array, 0);
-    const stack = new Float64Array(1e6);
     stack[0] = -1;
     Interpreter.execute(stack, 0, shared);
   }

@@ -7,6 +7,7 @@ import { BytecodeArray,
          printBytecodeArray,
          printSharedFunctionInfo,
          SharedFunctionInfo } from "./function";
+import * as Interpreter from "./interpreter";
 import { IVMConfig } from "./vm-config";
 
 class LabelOperand {
@@ -136,7 +137,7 @@ class BytecodeGenerator {
     this.visitStatementList(f.declaration.body.body);
     const bytecode_array = new BytecodeArray(
         this.bytecodes, this.maxRegisterCount, this.constants);
-    f.shared.bytecode_or_foreign = bytecode_array;
+    f.shared.bytecode = bytecode_array;
     return f.shared;
   }
 
@@ -419,12 +420,25 @@ class BytecodeGenerator {
 
 // Returns the address of the function object.
 export function generate(program : Ast.Program,
+                         memory : ArrayBuffer,
                          config : IVMConfig)
       : BytecodeArray {
+  const stack = new Float64Array(memory);
+
   // Turn the ffi functions to SharedFunctionInfos.
   const ffi = new Map<string, SharedFunctionInfo>();
   for (const f of config.ffi) {
-    ffi.set(f[0], new SharedFunctionInfo(f[0], f[1], f[1].parameter_count));
+    const foreign = f[1];
+    const trampoline = (frame_ptr : number) : number => {
+      const args = [];
+      for (let i = 0; i < f[1].parameter_count; i++) {
+        args.push(stack[frame_ptr - 1 - i]);
+      }
+      return foreign.fn(...args);
+    };
+    const shared = new SharedFunctionInfo(f[0], null, f[1].parameter_count);
+    shared.code = trampoline;
+    ffi.set(f[0], shared);
   }
 
   const functions : IFunctionToCompile[] = [];
@@ -441,8 +455,10 @@ export function generate(program : Ast.Program,
   while (functions.length > 0) {
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());
+    f.code = (frame_ptr : number) => {
+      return Interpreter.execute(stack, frame_ptr, f);
+    };
     if (config.printBytecode) {
-      const fun_bytecode = f.bytecode_or_foreign as BytecodeArray;
       printSharedFunctionInfo(f);
     }
   }

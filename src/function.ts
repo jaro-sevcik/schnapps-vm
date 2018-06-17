@@ -27,23 +27,26 @@ export interface IForeignFunction {
 
 export class SharedFunctionInfo {
     parameter_count : number;
-    bytecode_or_foreign : BytecodeArray | IForeignFunction;
-    code : (memory : Float64Array, frame_ptr : number) => number;
+    bytecode : BytecodeArray;
+    // TODO(jarin) This should eventually take the function so that
+    // we do not have to pass it through a closure. Ideally, this
+    // would point directy to the interpreter's execute function.
+    code : (frame_ptr : number) => number = undefined;
     name : string;
 
     constructor(name : string,
-                bytecode_or_foreign : BytecodeArray | IForeignFunction,
+                bytecode : BytecodeArray,
                 parameter_count : number)  {
       this.name = name;
-      this.bytecode_or_foreign = bytecode_or_foreign;
+      this.bytecode = bytecode;
       this.parameter_count = parameter_count;
     }
 }
 
 export function printSharedFunctionInfo(f : SharedFunctionInfo) {
     console.log(`Function ${f.name} (param count ${f.parameter_count}):`);
-    if (f.bytecode_or_foreign instanceof BytecodeArray) {
-        printBytecodeArray(f.bytecode_or_foreign);
+    if (f.bytecode) {
+        printBytecodeArray(f.bytecode);
     } else {
         console.log("   <native>");
     }

@@ -52,15 +52,14 @@ class Environment {
 function newEnvironment(start_block : IR.GraphStartBlock,
                         first_block : IR.BasicBlock,
                         shared : SharedFunctionInfo) : Environment {
-  const bytecode_array = shared.bytecode_or_foreign as BytecodeArray;
   const env = new Environment(start_block, shared.parameter_count,
-                              bytecode_array.register_count);
+                              shared.bytecode.register_count);
   env.setBlock(first_block);
   return env;
 }
 
 function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
-    const bytecode_array = shared.bytecode_or_foreign as BytecodeArray;
+    const bytecode_array = shared.bytecode;
     const bytecodes = bytecode_array.bytecodes;
     const constants = bytecode_array.constants;
     const environments_to_merge = new Map<number, Environment>();

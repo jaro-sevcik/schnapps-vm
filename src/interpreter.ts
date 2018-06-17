@@ -9,7 +9,7 @@ export function execute(stack : Float64Array,
                         frame_ptr : number,
                         shared : SharedFunctionInfo) : number {
   let pc = 0;
-  const bytecode_array = shared.bytecode_or_foreign as BytecodeArray;
+  const bytecode_array = shared.bytecode;
   const bytecodes = bytecode_array.bytecodes;
   const constants = bytecode_array.constants;
   stack[frame_ptr + 1] = 0;  // Reserved for function.
@@ -129,25 +129,16 @@ export function execute(stack : Float64Array,
         const callee = constants[bytecodes[pc++]];
         const args_start = bytecodes[pc++];
         const args_count = bytecodes[pc++];
-        if (callee.bytecode_or_foreign instanceof BytecodeArray) {
-          // Push current frame.
-          let stack_top = frame_ptr + bytecode_array.register_count;
-          assert.strictEqual(args_count, callee.parameter_count);
-          // Push the arguments to the new frame.
-          for (let i = args_count - 1; i >= 0; --i) {
-            stack[stack_top++] = getRegister(args_start + i);
-          }
-          stack[stack_top] = frame_ptr;  // Frame pointer.
-          const result = execute(stack, stack_top, callee);
-          setRegister(result_reg, result);
-        } else {
-          const foreign = callee.bytecode_or_foreign as IForeignFunction;
-          const callee_args = [];
-          for (let i = 0; i < args_count; i++) {
-            callee_args.push(getRegister(args_start + i));
-          }
-          setRegister(result_reg, foreign.fn.apply(undefined, callee_args));
+        // Push current frame.
+        let stack_top = frame_ptr + bytecode_array.register_count;
+        assert.strictEqual(args_count, callee.parameter_count);
+        // Push the arguments to the new frame.
+        for (let i = args_count - 1; i >= 0; --i) {
+          stack[stack_top++] = getRegister(args_start + i);
         }
+        stack[stack_top] = frame_ptr;  // Frame pointer.
+        const result = callee.code(stack_top);
+        setRegister(result_reg, result);
         break;
       }
       case Opcode.Return: {
