@@ -28,6 +28,7 @@ export interface IForeignFunction {
 export class SharedFunctionInfo {
     parameter_count : number;
     bytecode_or_foreign : BytecodeArray | IForeignFunction;
+    code : (memory : Float64Array, frame_ptr : number) => number;
     name : string;
 
     constructor(name : string,
