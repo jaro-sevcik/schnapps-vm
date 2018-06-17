@@ -1,9 +1,7 @@
 import * as assert from "assert";
 import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
-import { BytecodeArray,
-         IForeignFunction,
-         SharedFunctionInfo } from "./function";
+import { SharedFunctionInfo } from "./function";
 
 export function execute(stack : Float64Array,
                         frame_ptr : number,

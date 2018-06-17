@@ -328,8 +328,8 @@ class BytecodeGenerator {
   }
 
   visitCallExpression(e : Ast.CallExpression, destination : number) {
-    // At the moment we only support calls to "print" with one argument.
-    // Check that this is what we have here.
+    // At the moment, we only support calls to fixed functions.
+    // Check that we only have identifier here.
     if (e.callee.type !== "Identifier") this.throwError(e);
     const name = (e.callee as Ast.Identifier).name;
     // TODO(jarin) Should lookup in variables.
@@ -346,6 +346,7 @@ class BytecodeGenerator {
     } else {
       this.throwError(e, `Unknown function "${name}".`);
     }
+    // TODO(jarin) Argument adaptation?
     if (e.arguments.length !== target.parameter_count) {
       this.throwError(e,
         `Param count mismatch for function "${name}".`);
@@ -423,12 +424,15 @@ export function generate(program : Ast.Program,
                          memory : ArrayBuffer,
                          config : IVMConfig)
       : BytecodeArray {
+  // We bake the stack into various trampolines in SharedFunctionInfo.
   const stack = new Float64Array(memory);
 
   // Turn the ffi functions to SharedFunctionInfos.
   const ffi = new Map<string, SharedFunctionInfo>();
   for (const f of config.ffi) {
     const foreign = f[1];
+    // Create a trampoline that reads the arguments out from the stack
+    // and passes them to the foreign function.
     const trampoline = (frame_ptr : number) : number => {
       const args = [];
       for (let i = 0; i < f[1].parameter_count; i++) {
@@ -436,6 +440,8 @@ export function generate(program : Ast.Program,
       }
       return foreign.fn(...args);
     };
+    // Create the shared function info object and set its code object
+    // to the trampoline.
     const shared = new SharedFunctionInfo(f[0], null, f[1].parameter_count);
     shared.code = trampoline;
     ffi.set(f[0], shared);
@@ -451,7 +457,7 @@ export function generate(program : Ast.Program,
     printBytecodeArray(result);
   }
 
-  // Compiler inner functions.
+  // Compile inner functions.
   while (functions.length > 0) {
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());

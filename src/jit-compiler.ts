@@ -1,8 +1,8 @@
-import * as Bytecode from "./bytecode";
 import * as BC from "./bytecode";
-import { BytecodeArray,
-         SharedFunctionInfo } from "./function";
+import { SharedFunctionInfo } from "./function";
 import * as IR from "./ir-graph";
+
+export const compileTickCount : number = 1000;
 
 class Environment {
     private parameter_count : number;
