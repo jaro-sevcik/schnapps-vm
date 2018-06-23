@@ -10,7 +10,6 @@ export class Graph {
         this.entry = new GraphStartBlock(parameter_count, this);
         this.exit = new BasicBlock(this);
         this.entry.addSuccessor(this.exit);
-        this.exit = this.entry;
     }
 
     getNextBlockId() : number {
@@ -76,12 +75,8 @@ export class Node {
 
     toString() {
         let s = `${this.id}: ${Opcode[this.opcode]}${this.debugDataString()}: `;
-        if (this.inputs.length > 0) {
-            s += `${this.inputs[0].id} `;
-            for (let i = 1; i < this.inputs.length; i++) {
-                s += `,${this.inputs[i].id} `;
-            }
-        }
+        s += this.inputs.map((n : Node) => n.id).join(", ");
+        return s;
     }
 }
 
@@ -126,9 +121,9 @@ export class ReturnNode extends Node {
 export class BasicBlock {
     id : number;
     graph : Graph;
-    successors : BasicBlock[];
-    predecessors : BasicBlock[];
-    nodes : Node[];
+    successors : BasicBlock[] = [];
+    predecessors : BasicBlock[] = [];
+    nodes : Node[] = [];
 
     constructor(graph : Graph) {
         this.graph = graph;
@@ -155,7 +150,7 @@ export class BasicBlock {
             s += ` (preds: B${this.blockListToString(this.predecessors)})`;
         }
         if (this.successors.length > 0) {
-            s += ` (preds: B${this.blockListToString(this.successors)})`;
+            s += ` (succ: B${this.blockListToString(this.successors)})`;
         }
         console.log(s);
         for (const n of this.nodes) {
@@ -165,7 +160,7 @@ export class BasicBlock {
 }
 
 export class GraphStartBlock extends BasicBlock {
-    parameters : Node[];
+    parameters : Node[] = [];
     undefinedConstant : Node;
 
     constructor(parameter_count : number, graph : Graph) {

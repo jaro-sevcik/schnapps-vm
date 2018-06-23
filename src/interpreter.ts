@@ -2,10 +2,19 @@ import * as assert from "assert";
 import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
 import { SharedFunctionInfo } from "./function";
+import * as JIT from "./jit-compiler";
 
 export function execute(stack : Float64Array,
+                        memory : WebAssembly.Memory,
                         frame_ptr : number,
                         shared : SharedFunctionInfo) : number {
+  if (shared.bytecode.profile_counter > JIT.compileTickCount) {
+    // Optimize the code, and call the optimized code.
+    if (JIT.compile(shared, memory)) {
+      return shared.code(frame_ptr);
+    }
+  }
+
   let pc = 0;
   const bytecode_array = shared.bytecode;
   const bytecodes = bytecode_array.bytecodes;

@@ -421,11 +421,11 @@ class BytecodeGenerator {
 
 // Returns the address of the function object.
 export function generate(program : Ast.Program,
-                         memory : ArrayBuffer,
+                         memory : WebAssembly.Memory,
                          config : IVMConfig)
       : BytecodeArray {
   // We bake the stack into various trampolines in SharedFunctionInfo.
-  const stack = new Float64Array(memory);
+  const stack = new Float64Array(memory.buffer);
 
   // Turn the ffi functions to SharedFunctionInfos.
   const ffi = new Map<string, SharedFunctionInfo>();
@@ -462,7 +462,7 @@ export function generate(program : Ast.Program,
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());
     f.code = (frame_ptr : number) => {
-      return Interpreter.execute(stack, frame_ptr, f);
+      return Interpreter.execute(stack, memory, frame_ptr, f);
     };
     if (config.printBytecode) {
       printSharedFunctionInfo(f);

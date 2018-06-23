@@ -14,15 +14,14 @@ const defaultConfig : IVMConfig = {
 };
 
 export class VirtualMachine {
-
   execute(code : string, config : IVMConfig = defaultConfig) {
     const ast = Parser.parse(code, { loc: true });
-    const memory = new ArrayBuffer(1e7);
-    const stack = new Float64Array(memory);
+    const memory = new WebAssembly.Memory({ initial : 16, maximum : 16 });
+    const stack = new Float64Array(memory.buffer);
     const bytecode_array =
         BytecodeGenerator.generate(ast, memory, config);
     const shared = new SharedFunctionInfo("<top-level>", bytecode_array, 0);
     stack[0] = -1;
-    Interpreter.execute(stack, 0, shared);
+    Interpreter.execute(stack, memory, 0, shared);
   }
 }
