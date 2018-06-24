@@ -8,7 +8,7 @@ export function execute(stack : Float64Array,
                         memory : WebAssembly.Memory,
                         frame_ptr : number,
                         shared : SharedFunctionInfo) : number {
-  if (shared.bytecode.profile_counter > JIT.compileTickCount) {
+  if (shared.bytecode.profile_counter > JIT.kCompileTickCount) {
     // Optimize the code, and call the optimized code.
     if (JIT.compile(shared, memory)) {
       return shared.code(frame_ptr);
