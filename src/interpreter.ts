@@ -3,14 +3,17 @@ import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
 import { SharedFunctionInfo } from "./function";
 import * as JIT from "./jit-compiler";
+import { IVMFlags } from "./vm-config";
 
 export function execute(stack : Float64Array,
                         memory : WebAssembly.Memory,
                         frame_ptr : number,
-                        shared : SharedFunctionInfo) : number {
+                        shared : SharedFunctionInfo,
+                        vm_flags : IVMFlags) : number {
   if (shared.bytecode.profile_counter > JIT.kCompileTickCount) {
     // Optimize the code, and call the optimized code.
-    if (JIT.compile(shared, memory)) {
+    shared.bytecode.profile_counter = 0;
+    if (shared.isOptimizable() && JIT.compile(shared, memory, vm_flags)) {
       return shared.code(frame_ptr);
     }
   }

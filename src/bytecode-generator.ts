@@ -8,7 +8,7 @@ import { BytecodeArray,
          printSharedFunctionInfo,
          SharedFunctionInfo } from "./function";
 import * as Interpreter from "./interpreter";
-import { IVMConfig } from "./vm-config";
+import { VMConfig } from "./vm-config";
 
 class LabelOperand {
   static Bound(offset : number) : LabelOperand {
@@ -422,7 +422,7 @@ class BytecodeGenerator {
 // Returns the address of the function object.
 export function generate(program : Ast.Program,
                          memory : WebAssembly.Memory,
-                         config : IVMConfig)
+                         config : VMConfig)
       : BytecodeArray {
   // We bake the stack into various trampolines in SharedFunctionInfo.
   const stack = new Float64Array(memory.buffer);
@@ -452,7 +452,7 @@ export function generate(program : Ast.Program,
   // Compile the top level code.
   const toplevel_generator = new BytecodeGenerator(ffi, functions);
   const result = toplevel_generator.compileProgram(program);
-  if (config.printBytecode) {
+  if (config.flags.printBytecode) {
     console.log("Top level code:");
     printBytecodeArray(result);
   }
@@ -462,9 +462,9 @@ export function generate(program : Ast.Program,
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());
     f.code = (frame_ptr : number) => {
-      return Interpreter.execute(stack, memory, frame_ptr, f);
+      return Interpreter.execute(stack, memory, frame_ptr, f, config.flags);
     };
-    if (config.printBytecode) {
+    if (config.flags.printBytecode) {
       printSharedFunctionInfo(f);
     }
   }

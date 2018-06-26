@@ -1,22 +1,20 @@
 import * as fs from "fs";
 import * as process from "process";
 import { VirtualMachine } from "./vm";
-import { IVMConfig } from "./vm-config";
+import { VMConfig } from "./vm-config";
 
 // tslint:disable-next-line:no-var-requires
 require("source-map-support").install();
 
-const config : IVMConfig = {
-  printBytecode : false,
-  ffi : new Map([
+const config : VMConfig = new VMConfig(
+  new Map([
     ["print", {
       fn : (a : number) => { console.log(a); return 0; },
       parameter_count : 1 }],
     ["time", {
         fn : () => Date.now(),
         parameter_count : 0 }],
-    ]),
-};
+    ]));
 
 let file : string | undefined;
 
@@ -25,7 +23,13 @@ for (let i = 2; i < process.argv.length; i++) {
   if (process.argv[i].startsWith("--")) {
     switch (process.argv[i]) {
       case "--print-bytecode":
-        config.printBytecode = true;
+        config.flags.printBytecode = true;
+        break;
+      case "--print-code":
+        config.flags.printCode = true;
+        break;
+      case "--print-graph":
+        config.flags.printGraph = true;
         break;
       default:
         console.error(`Unsupported switch ${p}.`);

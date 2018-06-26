@@ -3,6 +3,7 @@ import * as WasmJit from "wasm-jit";
 import * as BC from "./bytecode";
 import { SharedFunctionInfo } from "./function";
 import * as IR from "./ir-graph";
+import { IVMFlags } from "./vm-config";
 
 export const kCompileTickCount : number = 1000;
 export const kStackSlotLog2Size : number = 3;
@@ -206,7 +207,8 @@ class InstructionAssembler {
 function createWebassemblyFunction(
     shared : SharedFunctionInfo,
     sequence : ReversedInstructionSequence,
-    mem : WebAssembly.Memory) {
+    mem : WebAssembly.Memory,
+    vm_flags : IVMFlags) {
   const builder = new WasmJit.ModuleBuilder();
   const code = sequence.code.reverse();
   builder.addImportedMemory("I", "imported_mem");
@@ -219,7 +221,11 @@ function createWebassemblyFunction(
       .addLocals(locals)
       .addBody(code)  // --
       .exportAs("exported");
-  console.log(Wabt.readWasm(new Uint8Array(builder.toBuffer()), {}).toText({}));
+  if (vm_flags.printCode) {
+    console.log(`>>> Code for "${shared.name}".`);
+    console.log(
+        Wabt.readWasm(new Uint8Array(builder.toBuffer()), {}).toText({}));
+  }
   const i = builder.instantiate(
       { I : { imported_mem : mem }});
   return i.exports.exported;
@@ -228,7 +234,8 @@ function createWebassemblyFunction(
 function generateCode(
     shared : SharedFunctionInfo,
     graph : IR.Graph,
-    memory : WebAssembly.Memory) : (f : number) => number  {
+    memory : WebAssembly.Memory,
+    vm_flags : IVMFlags) : (f : number) => number  {
   const visited = new Set<IR.BasicBlock>();
   const sequence = new ReversedInstructionSequence();
   function generateCodeForBlock(bb : IR.BasicBlock) : boolean {
@@ -251,7 +258,7 @@ function generateCode(
   a.setLocal(0);
   sequence.add(a);
 
-  return createWebassemblyFunction(shared, sequence, memory);
+  return createWebassemblyFunction(shared, sequence, memory, vm_flags);
 }
 
 function generateCodeForNode(
@@ -331,20 +338,37 @@ function generateCodeForNodes(
   return true;
 }
 
-export function compile(shared : SharedFunctionInfo,
-                        memory : WebAssembly.Memory) : boolean {
+export function tryCompile(
+      shared : SharedFunctionInfo,
+      memory : WebAssembly.Memory,
+      vm_flags : IVMFlags) : (f : number) => number {
     // Build graph.
     const graph = buildGraph(shared);
-    if (!graph) return false;
+    if (!graph) return null;
 
-    graph.print();
+    if (vm_flags.printGraph) {
+      console.log(`>>> Graph for "${shared.name}".`);
+      graph.print();
+    }
 
     // Generate code.
-    const code = generateCode(shared, graph, memory);
+    const code = generateCode(shared, graph, memory, vm_flags);
     if (!code) {
-      console.log(`Code generation for "${shared.name}" failed.`);
-      return false;
+      return null;
     }
+    return code;
+}
+
+
+export function compile(shared : SharedFunctionInfo,
+                        memory : WebAssembly.Memory,
+                        trace_flags : IVMFlags) : boolean {
+  const code = tryCompile(shared, memory, trace_flags);
+  if (code) {
     shared.code = code;
-    return false;
+    return true;
+  } else {
+    shared.markCannotOptimize();
+  }
+  return false;
 }

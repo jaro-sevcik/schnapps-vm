@@ -25,6 +25,11 @@ export interface IForeignFunction {
     fn : (...args : number[]) => number;
 }
 
+export enum FunctionFlags {
+    kNone = 0,
+    kOptimizable = 1,
+}
+
 export class SharedFunctionInfo {
     parameter_count : number;
     bytecode : BytecodeArray;
@@ -33,6 +38,7 @@ export class SharedFunctionInfo {
     // would point directy to the interpreter's execute function.
     code : (frame_ptr : number) => number = undefined;
     name : string;
+    flags : FunctionFlags = FunctionFlags.kOptimizable;
 
     constructor(name : string,
                 bytecode : BytecodeArray,
@@ -40,6 +46,14 @@ export class SharedFunctionInfo {
       this.name = name;
       this.bytecode = bytecode;
       this.parameter_count = parameter_count;
+    }
+
+    markCannotOptimize() {
+        this.flags &= ~FunctionFlags.kOptimizable;
+    }
+
+    isOptimizable() : boolean {
+        return (this.flags & FunctionFlags.kOptimizable) !== 0;
     }
 }
 
