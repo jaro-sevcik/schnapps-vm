@@ -4,15 +4,8 @@ import { IForeignFunction, SharedFunctionInfo } from "./function";
 import * as Interpreter from "./interpreter";
 import { VMConfig } from "./vm-config";
 
-const defaultConfig = new VMConfig(
-  new Map([
-    ["print", {
-                fn : (a : number) => { console.log(a); return 0; },
-                parameter_count : 1,
-              }]]));
-
 export class VirtualMachine {
-  execute(code : string, config : VMConfig = defaultConfig) {
+  execute(code : string, config : VMConfig) {
     const ast = Parser.parse(code, { loc: true });
     const memory = new WebAssembly.Memory({ initial : 16, maximum : 16 });
     const stack = new Float64Array(memory.buffer);
