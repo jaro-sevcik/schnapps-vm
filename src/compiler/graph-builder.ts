@@ -1,6 +1,6 @@
-import * as BC from "src/bytecode";
-import * as IR from "src/compiler/ir-graph";
-import { SharedFunctionInfo } from "src/function";
+import * as BC from "./../bytecode";
+import * as IR from "./../compiler/ir-graph";
+import { SharedFunctionInfo } from "./../function";
 
 class Environment {
     private parameter_count : number;

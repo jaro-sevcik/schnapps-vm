@@ -1,14 +1,14 @@
 import * as assert from "assert";
 import * as Ast from "estree";
-import { Opcode } from "src/bytecode";
-import * as Bytecode from "src/bytecode";
+import { Opcode } from "./bytecode";
+import * as Bytecode from "./bytecode";
 import { BytecodeArray,
          IForeignFunction,
          printBytecodeArray,
          printSharedFunctionInfo,
-         SharedFunctionInfo } from "src/function";
-import * as Interpreter from "src/interpreter";
-import { VMConfig } from "src/vm-config";
+         SharedFunctionInfo } from "./function";
+import * as Interpreter from "./interpreter";
+import { VMConfig } from "./vm-config";
 
 class LabelOperand {
   static Bound(offset : number) : LabelOperand {

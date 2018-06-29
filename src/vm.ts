@@ -1,8 +1,8 @@
 import * as Parser from "esprima";
-import * as BytecodeGenerator from "src/bytecode-generator";
-import { IForeignFunction, SharedFunctionInfo } from "src/function";
-import * as Interpreter from "src/interpreter";
-import { VMConfig } from "src/vm-config";
+import * as BytecodeGenerator from "./bytecode-generator";
+import { IForeignFunction, SharedFunctionInfo } from "./function";
+import * as Interpreter from "./interpreter";
+import { VMConfig } from "./vm-config";
 
 export class VirtualMachine {
   execute(code : string, config : VMConfig) {

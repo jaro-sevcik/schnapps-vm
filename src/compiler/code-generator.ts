@@ -1,8 +1,9 @@
-import * as IR from "src/compiler/ir-graph";
-import { SharedFunctionInfo } from "src/function";
-import { IVMFlags } from "src/vm-config";
 import * as Wabt from "wabt";
 import * as WasmJit from "wasm-jit";
+
+import * as IR from "./../compiler/ir-graph";
+import { SharedFunctionInfo } from "./../function";
+import { IVMFlags } from "./../vm-config";
 
 export const kStackSlotLog2Size : number = 3;
 

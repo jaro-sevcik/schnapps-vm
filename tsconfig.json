@@ -11,9 +11,6 @@
     "paths": {
       "*": [
         "node_modules/*",
-      ],
-      "src/*" : [
-        "src/*",
       ]
     }
   },

@@ -1,7 +1,7 @@
-import { generateCode } from "src/compiler/code-generator";
-import { buildGraph } from "src/compiler/graph-builder";
-import { SharedFunctionInfo } from "src/function";
-import { IVMFlags } from "src/vm-config";
+import { generateCode } from "./../compiler/code-generator";
+import { buildGraph } from "./../compiler/graph-builder";
+import { SharedFunctionInfo } from "./../function";
+import { IVMFlags } from "./../vm-config";
 
 export const kCompileTickCount : number = 1000;
 
