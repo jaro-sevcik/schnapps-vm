@@ -109,18 +109,11 @@ export function generateCode(
     graph : IR.Graph,
     memory : WebAssembly.Memory,
     vm_flags : IVMFlags) : (f : number) => number  {
-  const visited = new Set<IR.BasicBlock>();
   const sequence = new ReversedInstructionSequence();
-  function generateCodeForBlock(bb : IR.BasicBlock) : boolean {
-    for (const s of bb.successors) {
-      if (!visited.has(s)) {
-        visited.add(s);
-        if (!generateCodeForBlock(s)) return false;
-      }
-    }
-    return generateCodeForNodes(bb.nodes, sequence);
+  const reverseBlockOrder = computeBlockOrder(graph.entry);
+  for (const bb of reverseBlockOrder) {
+    if (!generateCodeForNodes(bb.nodes, sequence)) return null;
   }
-  if (!generateCodeForBlock(graph.entry)) return null;
 
   // Emit prologue.
   const a = new InstructionAssembler();
@@ -209,4 +202,33 @@ function generateCodeForNodes(
     }
   }
   return true;
+}
+
+class BasicBlockOrderData {
+  visited : boolean;
+}
+
+function computeBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
+  const order : IR.BasicBlock[] = [];
+  const orderData : BasicBlockOrderData[] = [];
+  function getData(bb : IR.BasicBlock) : BasicBlockOrderData {
+    let d = orderData[bb.id];
+    if (!d) {
+      d = new BasicBlockOrderData();
+      orderData[bb.id] = d;
+    }
+    return d;
+  }
+  function processBlock(bb : IR.BasicBlock) {
+    for (const s of bb.successors) {
+      const successorData = getData(s);
+      if (!successorData.visited) {
+        successorData.visited = true;
+        processBlock(s);
+      }
+    }
+    order.push(bb);
+  }
+  processBlock(entry);
+  return order;
 }
