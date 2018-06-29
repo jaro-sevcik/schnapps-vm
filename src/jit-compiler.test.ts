@@ -22,15 +22,15 @@ test("run_while_add", () => {
     const vm = new VirtualMachine();
     const config = new TestConfig(false);
     vm.execute(`function f(x) {
-        return x + 1;
-      }
-      var i = 0;
-      var j = 0;
-      while (i < 1000) {
-        i = f(i);
-        j = j + 2;
-      }
-      print(j);`, config);
+                    return x + 1;
+                }
+                var i = 0;
+                var j = 0;
+                while (i < 1000) {
+                    i = f(i);
+                    j = j + 2;
+                }
+                print(j);`, config);
 
     expect(config.out).toBe("2000");
 });
