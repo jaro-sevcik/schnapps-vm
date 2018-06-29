@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
+import * as JIT from "./compiler/jit-compiler";
 import { SharedFunctionInfo } from "./function";
-import * as JIT from "./jit-compiler";
 import { IVMFlags } from "./vm-config";
 
 export function execute(stack : Float64Array,

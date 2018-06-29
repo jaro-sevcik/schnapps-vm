@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as process from "process";
-import { VirtualMachine } from "./vm";
-import { VMConfig } from "./vm-config";
+import { VirtualMachine } from "src/vm";
+import { VMConfig } from "src/vm-config";
 
 // tslint:disable-next-line:no-var-requires
 require("source-map-support").install();

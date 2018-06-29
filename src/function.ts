@@ -1,4 +1,4 @@
-import { printBytecode } from "./bytecode";
+import { printBytecode } from "src/bytecode";
 
 export class BytecodeArray {
   bytecodes : number[];

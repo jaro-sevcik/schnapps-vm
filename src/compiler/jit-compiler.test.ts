@@ -1,6 +1,6 @@
-import { IForeignFunction } from "./function";
-import { VirtualMachine } from "./vm";
-import { VMConfig } from "./vm-config";
+import { IForeignFunction } from "src/function";
+import { VirtualMachine } from "src/vm";
+import { VMConfig } from "src/vm-config";
 
 class TestConfig extends VMConfig {
     out = "";
