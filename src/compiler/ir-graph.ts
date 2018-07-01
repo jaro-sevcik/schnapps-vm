@@ -120,7 +120,11 @@ export class ReturnNode extends Node {
 
 export class BasicBlock {
     id : number;
+    orderIndex : number = -1;
+    containingLoop : BasicBlock = null;
+
     graph : Graph;
+
     successors : BasicBlock[] = [];
     predecessors : BasicBlock[] = [];
     nodes : Node[] = [];
@@ -138,6 +142,16 @@ export class BasicBlock {
     addSuccessor(successor : BasicBlock) {
         this.successors.push(successor);
         successor.predecessors.push(this);
+    }
+
+    removeSuccessor(successor : BasicBlock) {
+      const successor_index = this.successors.indexOf(successor);
+      assert.notStrictEqual(successor_index, -1);
+      this.successors.splice(successor_index, 1);
+
+      const predecessor_index = successor.predecessors.indexOf(this);
+      assert.notStrictEqual(predecessor_index, -1);
+      successor.predecessors.splice(predecessor_index, 1);
     }
 
     blockListToString(l : BasicBlock[]) {

@@ -110,7 +110,7 @@ export function generateCode(
     memory : WebAssembly.Memory,
     vm_flags : IVMFlags) : (f : number) => number  {
   const sequence = new ReversedInstructionSequence();
-  const reverseBlockOrder = computeBlockOrder(graph.entry);
+  const reverseBlockOrder = computeReverseBlockOrder(graph.entry);
   for (const bb of reverseBlockOrder) {
     if (!generateCodeForNodes(bb.nodes, sequence)) return null;
   }
@@ -205,12 +205,47 @@ function generateCodeForNodes(
 }
 
 class BasicBlockOrderData {
-  visited : boolean;
+  visited : boolean = false;
+  onStack : boolean = false;
+  orderIndexStack : number[] = null;
 }
 
-function computeBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
+class LoopInfo {
+  header : IR.BasicBlock;
+  backedges : IR.BasicBlock[] = [];
+
+  constructor(backedge : IR.BasicBlock, header : IR.BasicBlock) {
+    this.header = header;
+    this.backedges.push(backedge);
+  }
+
+  addBackedge(backedge : IR.BasicBlock) {
+    this.backedges.push(backedge);
+  }
+}
+
+class Loops {
+  infos : LoopInfo[] = [];
+
+  addBackedge(backedge : IR.BasicBlock, header : IR.BasicBlock) {
+    for (const l of this.infos) {
+      if (l.header === header) {
+        l.addBackedge(backedge);
+        return;
+      }
+    }
+    this.infos.push(new LoopInfo(backedge, header));
+  }
+
+}
+
+export const computeBlockOrderForTesting = computeReverseBlockOrder;
+
+function computeReverseBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
   const order : IR.BasicBlock[] = [];
   const orderData : BasicBlockOrderData[] = [];
+  const loops = new Loops();
+
   function getData(bb : IR.BasicBlock) : BasicBlockOrderData {
     let d = orderData[bb.id];
     if (!d) {
@@ -219,16 +254,114 @@ function computeBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
     }
     return d;
   }
+
+  // Walk the CFG in DFS order, record all backedges. We also construct
+  // a reversed topological sort by recording the nodes in post order.
   function processBlock(bb : IR.BasicBlock) {
+    const blockData = getData(bb);
+    blockData.onStack = true;
+    blockData.visited = true;
     for (const s of bb.successors) {
       const successorData = getData(s);
-      if (!successorData.visited) {
-        successorData.visited = true;
+      if (successorData.onStack) {
+        // It is a backedge. Add it to our loop data structure. Since
+        // we always have only reducible loops, the first pushed block
+        // of any loop must be the loop header. As a result, the successor
+        // of any backedge must be the loop header.
+        loops.addBackedge(bb, s);
+      } else if (!successorData.visited) {
         processBlock(s);
       }
     }
+    blockData.onStack = false;
+
+    // Capture the order index and push it to the ordered list.
+    bb.orderIndex = order.length;
     order.push(bb);
   }
+
+  // The tryMarkBlock function marks a basic block {bb} to belong
+  // to loop with header {header}. The exception is the loop header,
+  // which points to its parent's loop header.
+  //
+  // The function returns false if the basic block is already marked.
+  function tryMarkBlock(bb : IR.BasicBlock, header : IR.BasicBlock) : boolean {
+    let insertInto : IR.BasicBlock = null;
+    const parent = header.containingLoop;
+
+    while (true) {
+      // If the block is already marked to be in the loop (or if it
+      // is the header), just skip.
+      if (bb === header) return false;
+      if (bb === parent) {
+        // We found the insertion point for the loop.
+        insertInto.containingLoop = header;
+        return true;
+      }
+      insertInto = bb;
+      bb = bb.containingLoop;
+    }
+  }
+
+  // Walk the graph backwards until header is reached and mark all
+  // basic blocks in the graph to belong to the loop.
+  function markLoop(bb : IR.BasicBlock, header : IR.BasicBlock) {
+    if (!tryMarkBlock(bb, header)) return;
+    for (const pred of bb.predecessors) {
+      markLoop(pred, header);
+    }
+  }
+
+  function getOrderIndexStack(bb : IR.BasicBlock) {
+    const d = getData(bb);
+    if (!d.orderIndexStack) {
+      const stack = [bb.orderIndex];
+      bb = bb.containingLoop;
+      while (bb) {
+        stack.push(bb.orderIndex);
+        bb = bb.containingLoop;
+      }
+      stack.reverse();
+      d.orderIndexStack = stack;
+    }
+    return d.orderIndexStack;
+  }
+
+  // Comparator for basic block ordering. The comparator takes into account
+  // the order of the containing loop first, so that basic blocks from
+  // the same loop are kept together.
+  function compareBlockOrder(left : IR.BasicBlock, right : IR.BasicBlock) {
+    const left_order = getOrderIndexStack(left);
+    const right_order = getOrderIndexStack(right);
+    const end = Math.min(left_order.length, right_order.length);
+    for (let i = 0; i < end; i++) {
+      if (left_order[i] > right_order[i]) return 1;
+      if (left_order[i] < right_order[i]) return -1;
+    }
+    if (left_order.length < right_order.length) return 1;
+    if (left_order.length > right_order.length) return -1;
+    return 0;
+  }
+
+  // Compute the topological order, disregarding loop back edges, but
+  // recording them for later processing.
   processBlock(entry);
+
+  // For each loop, mark all the loop member blocks to point to its
+  // header.
+  for (const l of loops.infos) {
+    // Walk the graph from each backedge, and mark loop membership.
+    for (const backedge of l.backedges) {
+      markLoop(backedge, l.header);
+    }
+  }
+
+  // Finally, resort the basic blocks to keep the basic blocks
+  // from the same loop grouped together.
+  order.sort(compareBlockOrder);
+
+  // Update the orderIndex field in basic blocks to reflect the new order.
+  order.forEach((v, i) => { v.orderIndex = i; });
+
   return order;
 }
