@@ -236,7 +236,6 @@ class Loops {
     }
     this.infos.push(new LoopInfo(backedge, header));
   }
-
 }
 
 export const computeBlockOrderForTesting = computeReverseBlockOrder;
@@ -281,24 +280,27 @@ function computeReverseBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
   }
 
   // The tryMarkBlock function marks a basic block {bb} to belong
-  // to loop with header {header}. The exception is the loop header,
-  // which points to its parent's loop header.
+  // to loop with header {header}. If the the basic block belongs to
+  // a nested loop, then it marks the least deeply nested header.
   //
-  // The function returns false if the basic block is already marked.
-  function tryMarkBlock(bb : IR.BasicBlock, header : IR.BasicBlock) : boolean {
-    let insertInto : IR.BasicBlock = null;
+  // The function returns the basic block, whose containgLoop field
+  // was changed or null if the block was already marked to belong
+  // to the loop.
+  function tryMarkBlock(bb : IR.BasicBlock,
+                        header : IR.BasicBlock) : IR.BasicBlock {
+    let markedNode : IR.BasicBlock = null;
     const parent = header.containingLoop;
 
     while (true) {
       // If the block is already marked to be in the loop (or if it
       // is the header), just skip.
-      if (bb === header) return false;
+      if (bb === header) return null;
       if (bb === parent) {
         // We found the insertion point for the loop.
-        insertInto.containingLoop = header;
-        return true;
+        markedNode.containingLoop = header;
+        return markedNode;
       }
-      insertInto = bb;
+      markedNode = bb;
       bb = bb.containingLoop;
     }
   }
@@ -306,7 +308,8 @@ function computeReverseBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
   // Walk the graph backwards until header is reached and mark all
   // basic blocks in the graph to belong to the loop.
   function markLoop(bb : IR.BasicBlock, header : IR.BasicBlock) {
-    if (!tryMarkBlock(bb, header)) return;
+    const markedNode = tryMarkBlock(bb, header);
+    if (!markedNode) return;
     for (const pred of bb.predecessors) {
       markLoop(pred, header);
     }
