@@ -110,9 +110,34 @@ export function generateCode(
     memory : WebAssembly.Memory,
     vm_flags : IVMFlags) : (f : number) => number  {
   const sequence = new ReversedInstructionSequence();
+
+  // Stack of basic block targets.
+  const control_flow_stack : IR.BasicBlock[] = [];
+  // Outstanding branch counts, indexed by basic blocks.
+  // For each basic block, the array contains the number of
+  // branches to the block that have not been emitted yet.
+  const outstanding_branch_counts : number[] = [];
   const reverseBlockOrder = computeReverseBlockOrder(graph.entry);
   for (const bb of reverseBlockOrder) {
+    // TODO Handle outgoing jumps.
+    // TODO Handle phis from successors.
+
     if (!generateCodeForNodes(bb.nodes, sequence)) return null;
+
+    // Pop all basic blocks that have all incoming branches resolved.
+    while (control_flow_stack.length > 0) {
+      const top_basic_block = control_flow_stack[control_flow_stack.length - 1];
+      if (outstanding_branch_counts[top_basic_block.id] === 0) {
+        control_flow_stack.pop();
+      } else {
+        break;
+      }
+    }
+
+    // Push the current basic block.
+    // TODO Handle loops.
+    control_flow_stack.push(bb);
+    outstanding_branch_counts[bb.id] = bb.predecessors.length;
   }
 
   // Emit prologue.

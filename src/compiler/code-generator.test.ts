@@ -51,12 +51,6 @@ test("simple_loop_exit_true", () => {
   const t = new IR.BasicBlock(g);
   const f = new IR.BasicBlock(g);
 
-  console.log(`entry: ${g.entry.id}`);
-  console.log(`exit: ${g.exit.id}`);
-  console.log(`l: ${l.id}`);
-  console.log(`t: ${t.id}`);
-  console.log(`f: ${f.id}`);
-
   g.entry.addSuccessor(l);
   l.addSuccessor(t);
   l.addSuccessor(f);
