@@ -25,19 +25,37 @@ export function execute(stack : Float64Array,
   stack[frame_ptr + 1] = 0;  // Reserved for function.
   for (let i = Bytecode.fixedSlotCount;
        i < bytecode_array.register_count; i++) {
-    stack[frame_ptr - 1 + i] = 0;
+    stack[frame_ptr + i] = 0;
   }
 
-  function setRegister(i : number, value : number) {
+  let stack_ptr = frame_ptr + bytecode_array.register_count;
+
+  function setLocal(i : number, value : number) {
     assert.ok(i < bytecode_array.register_count);
     assert.ok(-i - 1 < shared.parameter_count);
     stack[frame_ptr + i] = value;
   }
 
-  function getRegister(i : number) : number {
+  function getLocal(i : number) : number {
     assert.ok(i < bytecode_array.register_count);
     assert.ok(-i - 1 < shared.parameter_count);
     return stack[frame_ptr + i] as number;
+  }
+
+  function pushStack(value : number) {
+    stack[stack_ptr++] = value;
+  }
+
+  function popStack() {
+    return stack[--stack_ptr] as number;
+
+  }
+  function getStackTop() {
+    return stack[stack_ptr - 1] as number;
+  }
+
+  function drop(n : number) {
+    stack_ptr -= n;
   }
 
   function jumpTo(new_pc : number) {
@@ -48,68 +66,74 @@ export function execute(stack : Float64Array,
   while (pc < bytecodes.length) {
     const bytecode = bytecodes[pc++];
     switch (bytecode) {
-      case Opcode.LoadInteger: {
-        const register = bytecodes[pc++];
-        const value = bytecodes[pc++];
-        setRegister(register, value);
+      case Opcode.Drop: {
+        popStack();
         break;
       }
-      case Opcode.Load: {
-        const destination = bytecodes[pc++];
-        const source = bytecodes[pc++];
-        setRegister(destination, getRegister(source));
+      case Opcode.Dup: {
+        pushStack(getStackTop());
+        break;
+      }
+      case Opcode.LoadInteger: {
+        const value = bytecodes[pc++];
+        pushStack(value);
+        break;
+      }
+      case Opcode.LoadLocal: {
+        const local = bytecodes[pc++];
+        const value = getLocal(local);
+        pushStack(value);
+        break;
+      }
+      case Opcode.StoreLocal: {
+        const local = bytecodes[pc++];
+        const value = popStack();
+        setLocal(local, value);
         break;
       }
       case Opcode.Add: {
-        const result = bytecodes[pc++];
-        const left = bytecodes[pc++];
-        const right = bytecodes[pc++];
-        setRegister(result, getRegister(left) + getRegister(right));
+        const right = popStack();
+        const left = popStack();
+        pushStack(left + right);
         break;
       }
       case Opcode.Sub: {
-        const result = bytecodes[pc++];
-        const left = bytecodes[pc++];
-        const right = bytecodes[pc++];
-        setRegister(result, getRegister(left) - getRegister(right));
+        const right = popStack();
+        const left = popStack();
+        pushStack(left - right);
         break;
       }
       case Opcode.Mul: {
-        const result = bytecodes[pc++];
-        const left = bytecodes[pc++];
-        const right = bytecodes[pc++];
-        setRegister(result, getRegister(left) * getRegister(right));
+        const right = popStack();
+        const left = popStack();
+        pushStack(left * right);
         break;
       }
       case Opcode.Div: {
-        const result = bytecodes[pc++];
-        const left = bytecodes[pc++];
-        const right = bytecodes[pc++];
-        setRegister(result, getRegister(left) / getRegister(right));
+        const right = popStack();
+        const left = popStack();
+        pushStack(left / right);
         break;
       }
       case Opcode.TestEqual: {
-        const result = bytecodes[pc++];
-        const left = bytecodes[pc++];
-        const right = bytecodes[pc++];
+        const right = popStack();
+        const left = popStack();
         // TODO Fix to return boolean.
-        setRegister(result, +(getRegister(left) === getRegister(right)));
+        pushStack(+(left === right));
         break;
       }
       case Opcode.TestLessThan: {
-        const result = bytecodes[pc++];
-        const left = bytecodes[pc++];
-        const right = bytecodes[pc++];
+        const right = popStack();
+        const left = popStack();
         // TODO Fix to return boolean.
-        setRegister(result, +(getRegister(left) < getRegister(right)));
+        pushStack(+(left < right));
         break;
       }
       case Opcode.TestLessThanOrEqual: {
-        const result = bytecodes[pc++];
-        const left = bytecodes[pc++];
-        const right = bytecodes[pc++];
+        const right = popStack();
+        const left = popStack();
         // TODO Fix to return boolean.
-        setRegister(result, +(getRegister(left) <= getRegister(right)));
+        pushStack(+(left <= right));
         break;
       }
       case Opcode.Jump:
@@ -119,42 +143,37 @@ export function execute(stack : Float64Array,
         break;
       }
       case Opcode.JumpIfTrue: {
-        const condition = bytecodes[pc++];
         const target = bytecodes[pc++];
-        if (getRegister(condition) !== 0) {
+        if (popStack() !== 0) {
           jumpTo(target);
         }
         break;
       }
       case Opcode.JumpIfFalse: {
-        const condition = bytecodes[pc++];
         const target = bytecodes[pc++];
-        if (getRegister(condition) === 0) {
+        if (popStack() === 0) {
           jumpTo(target);
         }
         break;
       }
       case Opcode.Call: {
-        const result_reg = bytecodes[pc++];
+        // Read operands.
         const callee = constants[bytecodes[pc++]];
-        const args_start = bytecodes[pc++];
         const args_count = bytecodes[pc++];
-        // Push current frame.
-        let stack_top = frame_ptr + bytecode_array.register_count;
-        assert.strictEqual(args_count, callee.parameter_count);
-        // Push the arguments to the new frame.
-        for (let i = args_count - 1; i >= 0; --i) {
-          stack[stack_top++] = getRegister(args_start + i);
-        }
-        stack[stack_top] = frame_ptr;  // Frame pointer.
-        const result = callee.code(stack_top);
-        setRegister(result_reg, result);
+
+        // Store the frame point on the stack.
+        stack[stack_ptr] = frame_ptr;  // Frame pointer.
+        // Call the function, passing its frame pointer to it.
+        const result = callee.code(stack_ptr);
+        // Remove the frame arguments from the stack.
+        drop(args_count);
+        // Push the return value on the stack.
+        pushStack(result);
         break;
       }
       case Opcode.Return: {
-        const value = getRegister(bytecodes[pc++]);
         bytecode_array.profile_counter += pc;
-        return value;
+        return popStack();
       }
       default:
         console.error("Unknown bytecode " + bytecode + " at " + (pc - 1));

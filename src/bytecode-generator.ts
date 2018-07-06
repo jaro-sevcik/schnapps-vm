@@ -35,8 +35,7 @@ class BytecodeGenerator {
   variables = new Map<string, number | SharedFunctionInfo>();
   // Register 0 is reserved for caller frame pointer,
   // Register 1 is reserved for shared function info.
-  liveRegisterCount : number = Bytecode.fixedSlotCount;
-  maxRegisterCount : number = Bytecode.fixedSlotCount;
+  localCount : number = Bytecode.fixedSlotCount;
   functionsToCompile : IFunctionToCompile[];
 
   constructor(ffi : Map<string, SharedFunctionInfo>,
@@ -45,27 +44,10 @@ class BytecodeGenerator {
     this.functionsToCompile = functionsToCompile;
   }
 
-  // Register management. We allocate register stack machine style.
-  allocateRegister() : number {
-    return this.allocateRegisterRange(1);
-  }
-
-  allocateRegisterRange(n : number) : number {
-    const reg = this.liveRegisterCount;
-    this.liveRegisterCount += n;
-    if (this.liveRegisterCount > this.maxRegisterCount) {
-      this.maxRegisterCount = this.liveRegisterCount;
-    }
-    return reg;
-  }
-
-  freeRegisterRange(register : number, n : number) {
-    this.liveRegisterCount -= n;
-    assert.strictEqual(this.liveRegisterCount, register);
-  }
-
-  freeRegister(register : number) {
-    return this.freeRegisterRange(register, 1);
+  allocateLocalVariable() : number {
+    const index = this.localCount;
+    this.localCount++;
+    return index;
   }
 
   createConstant(c : SharedFunctionInfo) : number {
@@ -126,7 +108,7 @@ class BytecodeGenerator {
   // Entry point for generating bytecodes for the program.
   compileProgram(program : Ast.Program) : BytecodeArray {
     this.visitStatementList(program.body);
-    return new BytecodeArray(this.bytecodes, this.maxRegisterCount,
+    return new BytecodeArray(this.bytecodes, this.localCount,
                              this.constants);
   }
 
@@ -136,7 +118,7 @@ class BytecodeGenerator {
     this.defineArguments(f.declaration.params);
     this.visitStatementList(f.declaration.body.body);
     const bytecode_array = new BytecodeArray(
-        this.bytecodes, this.maxRegisterCount, this.constants);
+        this.bytecodes, this.localCount, this.constants);
     f.shared.bytecode = bytecode_array;
     return f.shared;
   }
@@ -157,9 +139,8 @@ class BytecodeGenerator {
         break;
       case "ExpressionStatement":
         const expression = (s as Ast.ExpressionStatement).expression;
-        const dummy_result = this.allocateRegister();
-        this.visitExpression(expression, dummy_result);
-        this.freeRegister(dummy_result);
+        this.visitExpression(expression);
+        this.emit([Opcode.Drop]);
         break;
       case "WhileStatement":
         this.visitWhileStatement(s as Ast.WhileStatement);
@@ -182,36 +163,35 @@ class BytecodeGenerator {
   }
 
   defineArguments(params : Ast.Pattern[]) {
+    const arg0_index = - params.length;
     for (let i = 0; i < params.length; i++) {
       if (params[i].type !== "Identifier") {
         this.throwError(params[i],
           `Non-identifier parameters not supported.`);
       }
       const p = params[i] as Ast.Identifier;
-      // Argument 0 lives at -1,
-      // Argument 1 at -2, etc.
-      this.variables.set(p.name, -1 - i);
+      this.variables.set(p.name, arg0_index + i);
     }
   }
 
-  // Helper for defining variables. It allocates a register for the
-  // variable, and then it stores the initial value there.
+  // Helper for defining variables. It allocates a local for the
+  // variable.
   defineVariable(n : Ast.Node, name : string) : number {
-    let register;
+    let variable_index;
     if (this.variables.has(name)) {
       // If the variable name already exists, let us use it.
       // TODO Remove this check as soon as we can assign functions
-      // to registers.
-      if (typeof register !== "number") {
+      // to locals.
+      if (typeof variable_index !== "number") {
         this.throwError(n, `Variable ${name} duplicated as a function.`);
       }
-      register = this.variables.get(name) as number;
+      variable_index = this.variables.get(name) as number;
     } else {
       // Otherwise, allocate a fresh register for the variable.
-      register = this.allocateRegister();
-      this.variables.set(name, register);
+      variable_index = this.allocateLocalVariable();
+      this.variables.set(name, variable_index);
     }
-    return register;
+    return variable_index;
   }
 
   visitFunctionDeclaration(d : Ast.FunctionDeclaration) {
@@ -238,9 +218,10 @@ class BytecodeGenerator {
       if (d.type !== "VariableDeclarator") this.throwError(d);
       if (d.id.type !== "Identifier") this.throwError(d.id);
       const id = d.id as Ast.Identifier;
-      const register = this.defineVariable(id, id.name);
+      const local_index = this.defineVariable(id, id.name);
       // If init is not defined, we should store 'undefined'.
-      this.visitExpression(d.init, register);
+      this.visitExpression(d.init);
+      this.emit([Opcode.StoreLocal, local_index]);
     }
   }
 
@@ -248,10 +229,9 @@ class BytecodeGenerator {
     const loop = new LabelOperand();
     this.bindLabel(loop);
     // Visit the condition.
-    const test_register = this.allocateRegister();
-    this.visitExpression(s.test, test_register);
+    this.visitExpression(s.test);
     const done = new LabelOperand();
-    this.emit([Opcode.JumpIfFalse, test_register, done]);
+    this.emit([Opcode.JumpIfFalse, done]);
     this.visitStatement(s.body);
     this.emit([Opcode.JumpLoop, loop]);
     this.bindLabel(done);
@@ -260,9 +240,8 @@ class BytecodeGenerator {
   visitIfStatement(s : Ast.IfStatement) {
     const else_label = new LabelOperand();
     // Visit the condition.
-    const test_register = this.allocateRegister();
-    this.visitExpression(s.test, test_register);
-    this.emit([Opcode.JumpIfFalse, test_register, else_label]);
+    this.visitExpression(s.test);
+    this.emit([Opcode.JumpIfFalse, else_label]);
     this.visitStatement(s.consequent);
     if (s.alternate) {
       const done_label = new LabelOperand();
@@ -277,34 +256,32 @@ class BytecodeGenerator {
 
   visitReturnStatement(s : Ast.ReturnStatement) {
     // Visit the return value.
-    const value_register = this.allocateRegister();
     if (s.argument) {
-      this.visitExpression(s.argument, value_register);
+      this.visitExpression(s.argument);
     } else {
       // TODO should return undefined here.
-      this.emit([Opcode.LoadInteger, value_register, 0]);
+      this.emit([Opcode.LoadInteger, 0]);
 
     }
-    this.emit([Opcode.Return, value_register]);
+    this.emit([Opcode.Return]);
   }
 
-  visitExpression(e : Ast.Expression, destination : number) {
+  visitExpression(e : Ast.Expression) {
     switch (e.type) {
       case "CallExpression":
-        this.visitCallExpression(e as Ast.CallExpression, destination);
+        this.visitCallExpression(e as Ast.CallExpression);
         break;
       case "BinaryExpression":
-        this.visitBinaryExpression(e as Ast.BinaryExpression, destination);
+        this.visitBinaryExpression(e as Ast.BinaryExpression);
         break;
       case "AssignmentExpression":
-        this.visitAssignmentExpression(e as Ast.AssignmentExpression,
-                                       destination);
+        this.visitAssignmentExpression(e as Ast.AssignmentExpression);
         break;
       case "Literal":
-        this.visitLiteral(e as Ast.Literal, destination);
+        this.visitLiteral(e as Ast.Literal);
         break;
       case "Identifier":
-        this.visitVariable(e as Ast.Identifier, destination);
+        this.visitVariable(e as Ast.Identifier);
         break;
       default:
         this.throwError(e);
@@ -312,22 +289,22 @@ class BytecodeGenerator {
     }
   }
 
-  visitVariable(id : Ast.Identifier, destination : number) {
+  visitVariable(id : Ast.Identifier) {
     if (!this.variables.has(id.name)) this.throwError(id);
-    const register = this.variables.get(id.name);
-    if (typeof register !== "number") {
+    const local_index = this.variables.get(id.name);
+    if (typeof local_index !== "number") {
       // TODO Should not be an error.
       this.throwError(id, `Variable ${name} duplicated as a function.`);
     }
-    this.emit([Opcode.Load, destination, register as number]);
+    this.emit([Opcode.LoadLocal, local_index as number]);
   }
 
-  visitLiteral(literal : Ast.Literal, destination : number) {
+  visitLiteral(literal : Ast.Literal) {
     if (typeof literal.value !== "number") this.throwError(literal);
-    this.emit([Opcode.LoadInteger, destination, literal.value as number]);
+    this.emit([Opcode.LoadInteger, literal.value as number]);
   }
 
-  visitCallExpression(e : Ast.CallExpression, destination : number) {
+  visitCallExpression(e : Ast.CallExpression) {
     // At the moment, we only support calls to fixed functions.
     // Check that we only have identifier here.
     if (e.callee.type !== "Identifier") this.throwError(e);
@@ -351,71 +328,57 @@ class BytecodeGenerator {
       this.throwError(e,
         `Param count mismatch for function "${name}".`);
     }
-    const register = this.allocateRegisterRange(target.parameter_count);
     for (let i = 0; i < target.parameter_count; i++) {
-      this.visitExpression(e.arguments[i] as Ast.Expression, register + i);
+      this.visitExpression(e.arguments[i] as Ast.Expression);
     }
     this.emit([Opcode.Call,
-               destination,
                this.createConstant(target),
-               register,
                target.parameter_count]);
-    this.freeRegisterRange(register, target.parameter_count);
   }
 
-  visitAssignmentExpression(e : Ast.AssignmentExpression,
-                            destination : number) {
+  visitAssignmentExpression(e : Ast.AssignmentExpression) {
     if (e.operator !== "=") this.throwError(e);
     if (e.left.type !== "Identifier") this.throwError(e);
     const id = e.left as Ast.Identifier;
     if (!this.variables.has(id.name)) this.throwError(e);
-    const register = this.variables.get(id.name);
-    if (typeof register !== "number") {
+    const local_index = this.variables.get(id.name);
+    if (typeof local_index !== "number") {
       this.throwError(e, `Cannot assign to function ${name}.`);
     }
-    this.visitExpression(e.right, register as number);
+    this.visitExpression(e.right);
+    this.emit([Opcode.Dup]);
+    this.emit([Opcode.StoreLocal, local_index as number]);
   }
 
-  visitBinaryExpression(e : Ast.BinaryExpression, destination : number) {
-      // Visit the left operand, store the result in {destination}.
-    const left = this.visitExpression(e.left, destination);
-    // Allocate a new register for the right operand, and visit the operand.
-    const rightRegister = this.allocateRegister();
-    const right = this.visitExpression(e.right, rightRegister);
+  visitBinaryExpression(e : Ast.BinaryExpression) {
+    this.visitExpression(e.left);
+    this.visitExpression(e.right);
     // Emit bytecode for the actual operation.
     switch (e.operator) {
       case "+":
-        this.emit([Opcode.Add, destination, destination, rightRegister]);
+        this.emit([Opcode.Add]);
         break;
       case "-":
-        this.emit([Opcode.Sub, destination, destination, rightRegister]);
+        this.emit([Opcode.Sub]);
         break;
       case "*":
-        this.emit([Opcode.Mul, destination, destination, rightRegister]);
+        this.emit([Opcode.Mul]);
         break;
       case "/":
-        this.emit([Opcode.Div, destination, destination, rightRegister]);
+        this.emit([Opcode.Div]);
         break;
       case "==":
-        this.emit([Opcode.TestEqual, destination, destination, rightRegister]);
+        this.emit([Opcode.TestEqual]);
         break;
       case "<":
-        this.emit(
-          [Opcode.TestLessThan, destination, destination, rightRegister]);
+        this.emit([Opcode.TestLessThan]);
         break;
       case "<=":
-        this.emit([Opcode.TestLessThanOrEqual,
-                   destination,
-                   destination,
-                   rightRegister]);
+        this.emit([Opcode.TestLessThanOrEqual]);
         break;
       default:
         this.throwError(e);
     }
-    // Free the register for the right operand. Note that we do not free
-    // the register for the left operand because we used that for the
-    // result.
-    this.freeRegister(rightRegister);
   }
 }
 

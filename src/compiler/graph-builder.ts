@@ -68,7 +68,7 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
     let pc = 0;
     while (pc < bytecode_array.bytecodes.length) {
         switch (bytecodes[pc++]) {
-            case BC.Opcode.Load: {
+            case BC.Opcode.LoadLocal: {
                 const destination = bytecodes[pc++];
                 const source = bytecodes[pc++];
                 env.setRegister(destination, env.getRegister(source));

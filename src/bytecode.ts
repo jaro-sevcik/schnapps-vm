@@ -1,8 +1,11 @@
 import * as assert from "assert";
 
 export enum Opcode {
+  Drop,               // Remove the top of the stack.
+  Dup,                // Duplicate the top of the stack.
   LoadInteger,
-  Load,
+  LoadLocal,
+  StoreLocal,
   Add,
   Sub,
   Mul,
@@ -21,12 +24,15 @@ export enum Opcode {
 }
 
 export enum OperandKind {
-  OutputRegister,
-  InputRegister,
-  InputRegisterRangeStart,
-  InputRegisterRangeCount,
+  // Index of local variable.
+  LocalIndex,
+  // Count of inputs consumed from the stack (e.g., for calls).
+  Count,
+  // Numeric constant.
   NumberConstant,
+  // Other constant (currently used for functions).
   Constant,
+  // Jump target id.
   Label,
 }
 
@@ -46,26 +52,25 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
 {
   const k = OperandKind;
   const o = Opcode;
-  register(o.LoadInteger, k.OutputRegister, k.NumberConstant);
-  register(o.Load, k.OutputRegister, k.InputRegister);
-  register(o.Add, k.OutputRegister, k.InputRegister, k.InputRegister);
-  register(o.Sub, k.OutputRegister, k.InputRegister, k.InputRegister);
-  register(o.Mul, k.OutputRegister, k.InputRegister, k.InputRegister);
-  register(o.Div, k.OutputRegister, k.InputRegister, k.InputRegister);
-  register(o.TestEqual, k.OutputRegister, k.InputRegister, k.InputRegister);
-  register(o.TestLessThan, k.OutputRegister, k.InputRegister, k.InputRegister);
-  register(o.TestLessThanOrEqual, k.OutputRegister, k.InputRegister,
-           k.InputRegister);
+  register(o.Drop);
+  register(o.Dup);
+  register(o.LoadInteger, k.NumberConstant);
+  register(o.LoadLocal, k.LocalIndex);
+  register(o.StoreLocal, k.LocalIndex);
+  register(o.Add);
+  register(o.Sub);
+  register(o.Mul);
+  register(o.Div);
+  register(o.TestEqual);
+  register(o.TestLessThan);
+  register(o.TestLessThanOrEqual);
   register(o.Jump, k.Label);
   register(o.JumpLoop, k.Label);
-  register(o.JumpIfTrue, k.InputRegister, k.Label);
-  register(o.JumpIfFalse, k.InputRegister, k.Label);
-  register(o.Call,
-           k.OutputRegister,                                      // Retval.
-           k.Constant,                                            // Target.
-           k.InputRegisterRangeStart, k.InputRegisterRangeCount); // Args.
-  register(o.Print, k.InputRegister);
-  register(o.Return, k.InputRegister);
+  register(o.JumpIfTrue, k.Label);
+  register(o.JumpIfFalse, k.Label);
+  register(o.Call, k.Constant, k.Count);
+  register(o.Print);
+  register(o.Return);
 }
 
 export function printBytecode(bytecodes : number[]) {
@@ -83,10 +88,8 @@ export function printBytecode(bytecodes : number[]) {
 
     // Print the opcode.
     s += fmt(descriptor.name, 15);
-    const ops = descriptor.operands;
-    let i = 0;
 
-    function regName(r : number) : string {
+    function localName(r : number) : string {
       if (r >= 0) {
         return `r${r}`;
       } else {
@@ -94,44 +97,30 @@ export function printBytecode(bytecodes : number[]) {
       }
     }
 
-    // Print output registers.
-    let isFirst = true;
-    for  (; i < ops.length && ops[i] === OperandKind.OutputRegister; i++) {
-      if (!isFirst) s += ", ";
-      isFirst = false;
-      s += regName(bytecodes[offset++]);
-    }
+    const args = [];
+    const ops = descriptor.operands;
 
     // Print input registers and constants (if there are any).
-    if (i < ops.length) {
-      if (i !== 0) s += " <- ";
-      for (isFirst = true; i < ops.length; i++) {
-        if (!isFirst) s += ", ";
-        isFirst = false;
-        if (ops[i] === OperandKind.InputRegister) {
-          s += regName(bytecodes[offset++]);
-        } else if (ops[i] === OperandKind.NumberConstant) {
-          s += bytecodes[offset++];
-        } else if (ops[i] === OperandKind.Constant) {
-          s += `[${bytecodes[offset++]}]`;
-        } else if (ops[i] === OperandKind.InputRegisterRangeStart) {
-          const start = bytecodes[offset++];
-          const count = bytecodes[offset++];
-          i++;
-          assert.strictEqual(ops[i], OperandKind.InputRegisterRangeCount);
-          if (count === 0) {
-            s += "--";
-          } else {
-            s += `r${start}:${start + count - 1}`;
-          }
-        } else {
-          assert.strictEqual(ops[i], OperandKind.Label);
-          s += `+${bytecodes[offset++]}`;
-        }
+    for (const op of ops) {
+      switch (op) {
+        case OperandKind.LocalIndex:
+          args.push(localName(bytecodes[offset++]));
+          break;
+        case OperandKind.Count:
+          args.push(bytecodes[offset++]);
+          break;
+        case OperandKind.NumberConstant:
+          args.push(bytecodes[offset++]);
+          break;
+        case OperandKind.Constant:
+          args.push(`[${bytecodes[offset++]}]`);
+          break;
+        case OperandKind.Label:
+          args.push(`+${bytecodes[offset++]}`);
+          break;
       }
     }
-    assert.strictEqual(i, ops.length);
-    console.log(s);
+    console.log(s + args.join(", "));
   }
   assert.strictEqual(offset, bytecodes.length);
 }
