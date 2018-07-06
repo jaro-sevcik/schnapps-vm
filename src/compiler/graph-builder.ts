@@ -3,48 +3,60 @@ import * as IR from "./../compiler/ir-graph";
 import { SharedFunctionInfo } from "./../function";
 
 class Environment {
-    private parameter_count : number;
-    private register_count : number;
-    private block : IR.BasicBlock;
-    private values : IR.Node[] = [];
+  private parameter_count : number;
+  private local_count : number;
+  private block : IR.BasicBlock;
+  private values : IR.Node[] = [];
 
-    constructor(block : IR.GraphStartBlock,
-                parameter_count : number,
-                register_count : number) {
-        this.block = block;
-        this.parameter_count = parameter_count;
-        this.register_count = register_count;
+  constructor(block : IR.GraphStartBlock,
+              parameter_count : number,
+              local_count : number) {
+    this.block = block;
+    this.parameter_count = parameter_count;
+    this.local_count = local_count;
 
-        // Initialize parameters.
-        for (let i = 0; i < this.parameter_count; i++) {
-            this.values.push(block.getParameter(i));
-        }
-
-        // Initialize registers.
-        for (let i = 0; i < this.register_count; i++) {
-            this.values.push(block.getUndefinedConstant());
-        }
+    // Initialize parameters.
+    for (let i = 0; i < this.parameter_count; i++) {
+        this.values.push(block.getParameter(i));
     }
 
-    getBlock() : IR.BasicBlock {
-        return this.block;
+    // Initialize locals.
+    for (let i = 0; i < this.local_count; i++) {
+        this.values.push(block.getUndefinedConstant());
     }
+  }
 
-    setBlock(block : IR.BasicBlock) {
-        this.block = block;
-    }
+  getBlock() : IR.BasicBlock {
+    return this.block;
+  }
 
-    registerIndexToValueIndex(index : number) {
-        return index + this.parameter_count;
-    }
+  setBlock(block : IR.BasicBlock) {
+    this.block = block;
+  }
 
-    getRegister(index : number) : IR.Node {
-        return this.values[this.registerIndexToValueIndex(index)];
-    }
+  localIndexToValueIndex(index : number) {
+    return index + this.parameter_count;
+  }
 
-    setRegister(index : number, value : IR.Node) {
-        this.values[this.registerIndexToValueIndex(index)] = value;
-    }
+  getLocal(index : number) : IR.Node {
+    return this.values[this.localIndexToValueIndex(index)];
+  }
+
+  setLocal(index : number, value : IR.Node) {
+    this.values[this.localIndexToValueIndex(index)] = value;
+  }
+
+  getStackTop() : IR.Node {
+    return this.values[this.values.length - 1];
+  }
+
+  popStack() : IR.Node {
+    return this.values.pop();
+  }
+
+  pushStack(value : IR.Node) {
+    this.values.push(value);
+  }
 }
 
 function newEnvironment(start_block : IR.GraphStartBlock,
@@ -68,31 +80,36 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
     let pc = 0;
     while (pc < bytecode_array.bytecodes.length) {
         switch (bytecodes[pc++]) {
+            case BC.Opcode.Dup:
+                env.pushStack(env.getStackTop());
+                break;
+
+            case BC.Opcode.Drop:
+                env.popStack();
+                break;
+
             case BC.Opcode.LoadLocal: {
-                const destination = bytecodes[pc++];
-                const source = bytecodes[pc++];
-                env.setRegister(destination, env.getRegister(source));
+                const local = bytecodes[pc++];
+                env.pushStack(env.getLocal(local));
                 break;
             }
 
             case BC.Opcode.LoadInteger: {
-                const register = bytecodes[pc++];
                 const value = bytecodes[pc++];
                 const constant = new IR.NumberConstantNode(value);
                 env.getBlock().appendNode(constant);
-                env.setRegister(register, constant);
+                env.pushStack(constant);
                 break;
             }
 
             case BC.Opcode.Add: {
-                const result = bytecodes[pc++];
-                const left = bytecodes[pc++];
-                const right = bytecodes[pc++];
+                const right = env.popStack();
+                const left = env.popStack();
                 const value = new IR.BinopNode(IR.Opcode.kJSAdd,
-                                                env.getRegister(left),
-                                                env.getRegister(right));
+                                               left,
+                                               right);
                 env.getBlock().appendNode(value);
-                env.setRegister(result, value);
+                env.pushStack(value);
                 break;
             }
 
@@ -116,7 +133,7 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
             throw new Error("Not implemented yet");
 
             case BC.Opcode.Return: {
-                const value = env.getRegister(bytecodes[pc++]);
+                const value = env.popStack();
                 const return_node = new IR.ReturnNode(value);
                 env.getBlock().appendNode(return_node);
                 // TODO set the environment to be unreachable.
