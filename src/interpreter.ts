@@ -162,7 +162,7 @@ export function execute(stack : Float64Array,
         const args_count = bytecodes[pc++];
 
         // Store the frame point on the stack.
-        stack[stack_ptr] = frame_ptr;  // Frame pointer.
+        stack[stack_ptr] = frame_ptr;
         // Call the function, passing its frame pointer to it.
         const result = callee.code(stack_ptr);
         // Remove the frame arguments from the stack.

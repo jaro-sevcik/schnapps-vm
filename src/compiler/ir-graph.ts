@@ -43,9 +43,16 @@ export enum Opcode {
     kPhi,
 
     kParameter,
+    kNumberConstant,
+
+    // Binary operations.
     kJSAdd,
     kJSSub,
-    kNumberConstant,
+    kJSMul,
+    kJSDiv,
+    kJSTestEqual,
+    kJSTestLessThan,
+    kJSTestLessThanOrEqual,
 
     // Control opcodes.
     kGoto,
@@ -115,6 +122,12 @@ export class BinopNode extends Node {
 export class ReturnNode extends Node {
     constructor(value : Node) {
         super(Opcode.kReturn, value);
+    }
+}
+
+export class BranchNode extends Node {
+    constructor(condition : Node) {
+        super(Opcode.kBranch, condition);
     }
 }
 

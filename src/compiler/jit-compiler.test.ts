@@ -34,3 +34,21 @@ test("run_while_add", () => {
 
     expect(config.out).toBe("2000");
 });
+
+test("run_while_if", () => {
+    const vm = new VirtualMachine();
+    const config = new TestConfig(false);
+    vm.execute(`function f(x) {
+                    if (x < 200) return x + 1;
+                    else return x + 2;
+                }
+                var i = 0;
+                var j = 0;
+                while (i < 600) {
+                    i = f(i);
+                    j = j + 2;
+                }
+                print(j);`, config);
+
+    expect(config.out).toBe("400");
+});

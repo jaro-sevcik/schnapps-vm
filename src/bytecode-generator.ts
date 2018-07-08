@@ -117,6 +117,9 @@ class BytecodeGenerator {
     // TODO add the variables to the scope.
     this.defineArguments(f.declaration.params);
     this.visitStatementList(f.declaration.body.body);
+    // TODO Return undefined rather than 0 here.
+    this.emit([Opcode.LoadInteger, 0]);
+    this.emit([Opcode.Return]);
     const bytecode_array = new BytecodeArray(
         this.bytecodes, this.localCount, this.constants);
     f.shared.bytecode = bytecode_array;
