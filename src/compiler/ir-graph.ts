@@ -174,10 +174,10 @@ export class BasicBlock {
     print() {
         let s = `  Block ${this.id}`;
         if (this.predecessors.length > 0) {
-            s += ` (preds: B${this.blockListToString(this.predecessors)})`;
+            s += ` (preds: ${this.blockListToString(this.predecessors)})`;
         }
         if (this.successors.length > 0) {
-            s += ` (succ: B${this.blockListToString(this.successors)})`;
+            s += ` (succ: ${this.blockListToString(this.successors)})`;
         }
         console.log(s);
         for (const n of this.nodes) {

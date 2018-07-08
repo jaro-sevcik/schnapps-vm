@@ -126,6 +126,7 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
       environments_to_merge.set(target, target_environment);
     } else {
       target_environment = environments_to_merge.get(target);
+      env.getBlock().addSuccessor(target_environment.getBlock());
       target_environment.merge(envToMerge);
     }
   }
