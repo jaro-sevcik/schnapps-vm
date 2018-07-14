@@ -36,19 +36,38 @@ test("run_while_add", () => {
 });
 
 test("run_while_if", () => {
-    const vm = new VirtualMachine();
-    const config = new TestConfig(false);
-    vm.execute(`function f(x) {
-                    if (x < 200) return x + 1;
-                    else return x + 2;
-                }
-                var i = 0;
-                var j = 0;
-                while (i < 600) {
-                    i = f(i);
-                    j = j + 2;
-                }
-                print(j);`, config);
+  const vm = new VirtualMachine();
+  const config = new TestConfig(false);
+  vm.execute(`function f(x) {
+                  if (x < 200) return x + 1;
+                  else return x + 2;
+              }
+              var i = 0;
+              var j = 0;
+              while (i < 600) {
+                  i = f(i);
+                  j = j + 2;
+              }
+              print(j);`, config);
 
-    expect(config.out).toBe("800");
+  expect(config.out).toBe("800");
+});
+
+test("run_while_if2", () => {
+  const vm = new VirtualMachine();
+  const config = new TestConfig(false);
+  vm.execute(`function f(x) {
+                  if (x < 200) return x + 1;
+                  else if (x < 400) return x + 5;
+                  else return x + 2;
+              }
+              var i = 0;
+              var j = 0;
+              while (i < 600) {
+                  i = f(i);
+                  j = j + 2;
+              }
+              print(j);`, config);
+
+  expect(config.out).toBe("680");
 });
