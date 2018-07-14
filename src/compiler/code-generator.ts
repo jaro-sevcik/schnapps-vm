@@ -1,3 +1,4 @@
+import * as assert from "assert";
 import * as Wabt from "wabt";
 import * as WasmJit from "wasm-jit";
 
@@ -64,12 +65,51 @@ class InstructionAssembler {
     this.code.push(WasmJit.Opcode.kF64Add);
   }
 
+  f64Sub() {
+    this.code.push(WasmJit.Opcode.kF64Sub);
+  }
+
+  f64Eq() {
+    this.code.push(WasmJit.Opcode.kF64Eq);
+  }
+
+  f64Le() {
+    this.code.push(WasmJit.Opcode.kF64Le);
+  }
+
+  f64Lt() {
+    this.code.push(WasmJit.Opcode.kF64Lt);
+  }
+
   i32Add() {
     this.code.push(WasmJit.Opcode.kI32Add);
   }
 
   i32Shl() {
     this.code.push(WasmJit.Opcode.kI32Shl);
+  }
+
+  f64ConvertI32U() {
+    this.code.push(WasmJit.Opcode.kF64ConvertI32U);
+  }
+
+  brIf(depth : number) {
+    this.code.push(WasmJit.Opcode.kBrIf);
+    WasmJit.emitU32V(depth, this.code);
+  }
+
+  br(depth : number) {
+    this.code.push(WasmJit.Opcode.kBr);
+    WasmJit.emitU32V(depth, this.code);
+  }
+
+  block() {
+    this.code.push(WasmJit.Opcode.kBlock);
+    this.code.push(WasmJit.Type.kStmt);
+  }
+
+  end() {
+    this.code.push(WasmJit.Opcode.kEnd);
   }
 
   ret() {
@@ -113,16 +153,64 @@ export function generateCode(
 
   // Stack of basic block targets.
   const control_flow_stack : IR.BasicBlock[] = [];
+  function depthOfBlock(bb : IR.BasicBlock) {
+    return control_flow_stack.length - control_flow_stack.indexOf(bb) - 1;
+  }
+  function tryPopStack() {
+    while (control_flow_stack.length > 0) {
+      const top = control_flow_stack[control_flow_stack.length - 1];
+      if (outstanding_branch_counts[top.id] !== 0) break;
+      control_flow_stack.pop();
+      const a = new InstructionAssembler();
+      a.block();
+      sequence.add(a);
+    }
+  }
   // Outstanding branch counts, indexed by basic blocks.
   // For each basic block, the array contains the number of
   // branches to the block that have not been emitted yet.
   const outstanding_branch_counts : number[] = [];
   const reverseBlockOrder = computeReverseBlockOrder(graph.entry);
-  for (const bb of reverseBlockOrder) {
-    // TODO Handle outgoing jumps.
+  for (let i = 0; i < reverseBlockOrder.length; i++) {
+    const bb = reverseBlockOrder[i];
     // TODO Handle phis from successors.
+    let last = bb.nodes.length - 1;
+    const last_node = bb.nodes[last];
+    switch (last_node.opcode) {
+      case IR.Opcode.kBranch: {
+        const a = new InstructionAssembler();
+        a.getLocal(sequence.getLocalIndex(last_node.inputs[0]));
+        a.f64Constant(0);
+        a.f64Eq();
+        a.brIf(depthOfBlock(bb.successors[0]));
+        if (reverseBlockOrder[i - 1] !== bb.successors[0]) {
+          a.br(depthOfBlock(bb.successors[1]));
+        }
+        sequence.add(a);
+        outstanding_branch_counts[bb.successors[0].id]--;
+        outstanding_branch_counts[bb.successors[1].id]--;
 
-    if (!generateCodeForNodes(bb.nodes, sequence)) return null;
+        last--;
+        break;
+      }
+      default:
+        // Insert branch to the next block if necessary.
+        if (bb.successors.length === 1) {
+          if (reverseBlockOrder[i - 1] !== bb.successors[0]) {
+            const a = new InstructionAssembler();
+            a.br(depthOfBlock(bb.successors[0]));
+            sequence.add(a);
+          }
+          outstanding_branch_counts[bb.successors[0].id]--;
+        } else {
+          assert.strictEqual(bb.successors.length, 0);
+        }
+        break;
+    }
+
+    tryPopStack();
+
+    if (!generateCodeForNodes(bb.nodes, last, sequence)) return null;
 
     // Pop all basic blocks that have all incoming branches resolved.
     while (control_flow_stack.length > 0) {
@@ -134,20 +222,28 @@ export function generateCode(
       }
     }
 
-    // Push the current basic block.
-    // TODO Handle loops.
+    // Push the current basic block and create a block end for it.
     control_flow_stack.push(bb);
     outstanding_branch_counts[bb.id] = bb.predecessors.length;
+    {
+      const a = new InstructionAssembler();
+      a.end();
+      sequence.add(a);
+    }
   }
+  tryPopStack();
+  assert.strictEqual(control_flow_stack.length, 0);
 
-  // Emit prologue.
-  const a = new InstructionAssembler();
-  // Multiply the frame pointer by 8.
-  a.getLocal(0);
-  a.i32Constant(kStackSlotLog2Size);
-  a.i32Shl();
-  a.setLocal(0);
-  sequence.add(a);
+  {
+    // Emit prologue.
+    const a = new InstructionAssembler();
+    // Multiply the frame pointer by 8.
+    a.getLocal(0);
+    a.i32Constant(kStackSlotLog2Size);
+    a.i32Shl();
+    a.setLocal(0);
+    sequence.add(a);
+  }
 
   return createWebassemblyFunction(shared, sequence, memory, vm_flags);
 }
@@ -176,8 +272,11 @@ function generateCodeForNode(
   }
 
   switch (node.opcode) {
+    case IR.Opcode.kGoto:
+    case IR.Opcode.kBranch:
     case IR.Opcode.kPhi:
-      return false;
+      throw new Error(
+        `Codegen: Unsupported ${node.id}:${IR.Opcode[node.opcode]}`);
 
     case IR.Opcode.kParameter: {
       const p = node as IR.ParameterNode;
@@ -193,8 +292,14 @@ function generateCodeForNode(
       break;
     }
 
-    case IR.Opcode.kJSSub:
+    case IR.Opcode.kJSSub: {
+      const b = node as IR.BinopNode;
+      emitGetNode(b.inputs[0]);
+      emitGetNode(b.inputs[1]);
+      a.f64Sub();
+      emitSetNode(b);
       break;
+    }
 
     case IR.Opcode.kJSAdd: {
       const b = node as IR.BinopNode;
@@ -205,14 +310,44 @@ function generateCodeForNode(
       break;
     }
 
-    case IR.Opcode.kGoto:
-    case IR.Opcode.kBranch:
-      return false;
+    case IR.Opcode.kJSTestEqual: {
+      const b = node as IR.BinopNode;
+      emitGetNode(b.inputs[0]);
+      emitGetNode(b.inputs[1]);
+      a.f64Eq();
+      a.f64ConvertI32U();
+      emitSetNode(b);
+      break;
+    }
+
+    case IR.Opcode.kJSTestLessThan: {
+      const b = node as IR.BinopNode;
+      emitGetNode(b.inputs[0]);
+      emitGetNode(b.inputs[1]);
+      a.f64Lt();
+      a.f64ConvertI32U();
+      emitSetNode(b);
+      break;
+    }
+
+    case IR.Opcode.kJSTestLessThanOrEqual: {
+      const b = node as IR.BinopNode;
+      emitGetNode(b.inputs[0]);
+      emitGetNode(b.inputs[1]);
+      a.f64Le();
+      a.f64ConvertI32U();
+      emitSetNode(b);
+      break;
+    }
 
     case IR.Opcode.kReturn:
       emitGetNode(node.inputs[0]);
       a.ret();
       break;
+
+    default:
+      throw new Error(
+        `Codegen: Unsupported ${node.id}:${IR.Opcode[node.opcode]}`);
   }
   sequence.add(a);
   return true;
@@ -220,8 +355,9 @@ function generateCodeForNode(
 
 function generateCodeForNodes(
     nodes : IR.Node[],
+    from : number,
     sequence : ReversedInstructionSequence) : boolean {
-  for (let i = nodes.length - 1; i >= 0; i-- ) {
+  for (let i = from; i >= 0; i-- ) {
     if (!generateCodeForNode(nodes[i], sequence)) {
       return false;
     }

@@ -5,8 +5,6 @@ import { IVMFlags } from "./../vm-config";
 
 export const kCompileTickCount : number = 1000;
 
-
-
 export function tryCompile(
       shared : SharedFunctionInfo,
       memory : WebAssembly.Memory,

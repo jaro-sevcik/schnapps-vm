@@ -50,5 +50,5 @@ test("run_while_if", () => {
                 }
                 print(j);`, config);
 
-    expect(config.out).toBe("400");
+    expect(config.out).toBe("800");
 });
