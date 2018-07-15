@@ -61,30 +61,30 @@ export enum Opcode {
 }
 
 export class Node {
-    static invalidId : number = -1;
-    id : number = Node.invalidId;
-    opcode : Opcode;
-    inputs : Node[];
+  static invalidId : number = -1;
+  id : number = Node.invalidId;
+  opcode : Opcode;
+  inputs : Node[];
 
-    constructor(opcode : Opcode, ...inputs : Node[]) {
-        this.opcode = opcode;
-        this.inputs = inputs;
-    }
+  constructor(opcode : Opcode, ...inputs : Node[]) {
+    this.opcode = opcode;
+    this.inputs = inputs;
+  }
 
-    setId(id : number) {
-        assert.strictEqual(this.id, Node.invalidId);
-        this.id = id;
-    }
+  setId(id : number) {
+    assert.strictEqual(this.id, Node.invalidId);
+    this.id = id;
+  }
 
-    debugDataString() : string {
-        return "";
-    }
+  debugDataString() : string {
+    return "";
+  }
 
-    toString() {
-        let s = `${this.id}: ${Opcode[this.opcode]}${this.debugDataString()}: `;
-        s += this.inputs.map((n : Node) => n.id).join(", ");
-        return s;
-    }
+  toString() {
+    let s = `${this.id}: ${Opcode[this.opcode]}${this.debugDataString()}: `;
+    s += this.inputs.map((n : Node) => n.id).join(", ");
+    return s;
+  }
 }
 
 export class ParameterNode extends Node {
@@ -101,34 +101,44 @@ export class ParameterNode extends Node {
 }
 
 export class NumberConstantNode extends Node {
-    n : number;
+  n : number;
 
-    constructor(n : number) {
-        super(Opcode.kNumberConstant);
-        this.n = n;
-    }
+  constructor(n : number) {
+    super(Opcode.kNumberConstant);
+    this.n = n;
+  }
 
-    debugDataString() : string {
-        return `[${this.n}]`;
-    }
+  debugDataString() : string {
+    return `[${this.n}]`;
+  }
 }
 
 export class BinopNode extends Node {
-    constructor(opcode : Opcode, left : Node, right : Node) {
-        super(opcode, left, right);
-    }
+  constructor(opcode : Opcode, left : Node, right : Node) {
+    super(opcode, left, right);
+  }
 }
 
 export class ReturnNode extends Node {
-    constructor(value : Node) {
-        super(Opcode.kReturn, value);
-    }
+  constructor(value : Node) {
+    super(Opcode.kReturn, value);
+  }
 }
 
 export class BranchNode extends Node {
-    constructor(condition : Node) {
-        super(Opcode.kBranch, condition);
-    }
+  constructor(condition : Node) {
+    super(Opcode.kBranch, condition);
+  }
+}
+
+export class PhiNode extends Node {
+  constructor(value : Node) {
+    super(Opcode.kPhi, value);
+  }
+
+  appendInput(n : Node) {
+    this.inputs.push(n);
+  }
 }
 
 export class BasicBlock {
@@ -145,6 +155,15 @@ export class BasicBlock {
     constructor(graph : Graph) {
         this.graph = graph;
         this.id = graph.getNextBlockId();
+    }
+
+    containsPhi(phi : Node) : boolean {
+      for (const n of this.nodes) {
+        console.log(`Test ${n.id} (${phi.id})`);
+        if (n === phi) return true;
+        if (n.opcode !== Opcode.kPhi) break;
+      }
+      return false;
     }
 
     appendNode(node : Node) {

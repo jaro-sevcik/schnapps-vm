@@ -71,3 +71,23 @@ test("run_while_if2", () => {
 
   expect(config.out).toBe("680");
 });
+
+test("run_test_if_phi", () => {
+  const vm = new VirtualMachine();
+  const config = new TestConfig(false);
+  vm.execute(`function f(x) {
+                  var r = 0;
+                  if (x < 200) r = x + 1;
+                  else return r = x + 2;
+                  return r;
+              }
+              var i = 0;
+              var j = 0;
+              while (i < 600) {
+                  i = f(i);
+                  j = j + 2;
+              }
+              print(j);`, config);
+
+  expect(config.out).toBe("800");
+});

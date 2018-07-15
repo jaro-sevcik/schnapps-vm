@@ -16,13 +16,18 @@ function InitialEnvironmentValues(start_block : IR.GraphStartBlock,
     for (let i = 0; i < local_count; i++) {
       values.push(start_block.getUndefinedConstant());
     }
+
     return values;
 }
 
 class Environment {
   private parameter_count : number;
   private local_count : number;
+  // Current basic block.
   private block : IR.BasicBlock;
+  // Values in the environment. The values list is of the form
+  // [par0, ... , parn, local0, ..., local m, stack_bottom, ..., stack_top]
+  // where n is parameter_count and m is local_count.
   private values : IR.Node[] = [];
 
   constructor(block : IR.BasicBlock,
@@ -79,10 +84,28 @@ class Environment {
   merge(other : Environment) {
     assert.strictEqual(this.values.length, other.values.length);
     for (let i = 0; i < this.values.length; i++) {
-      if (this.values[i] !== other.values[i]) {
-        // TODO
+      let value = this.values[i];
+
+      // If we are merging the same value, there is nothing to do.
+      if (value === other.values[i]) continue;
+
+      // If we have not created a phi for this value, do so now.
+      if (value.opcode !== IR.Opcode.kPhi ||
+          !this.getBlock().containsPhi(value)) {
+        value = new IR.PhiNode(value);
+        this.getBlock().appendNode(value);
+
+        this.values[i] = value;
+
       }
+
+      // Add the other value to the phi.
+      (value as IR.PhiNode).appendInput(other.values[i]);
     }
+  }
+
+  stackHeight() : number {
+    return this.values.length - this.parameter_count - this.local_count;
   }
 }
 
@@ -99,6 +122,9 @@ function newEnvironment(start_block : IR.GraphStartBlock,
   return env;
 }
 
+// This map is used for binary operations, where the graph is build
+// uniformly for all binary operations; the only thing that differs
+// for each bytecode is the IR opcode. The map below give sthis mapping.
 const bytecodeOpToJSOpcode = new Map<BC.Opcode, IR.Opcode>([
   [ BC.Opcode.Add, IR.Opcode.kJSAdd],
   [ BC.Opcode.Sub, IR.Opcode.kJSSub ],
@@ -161,6 +187,12 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
         break;
       }
 
+      case BC.Opcode.StoreLocal: {
+        const local = bytecodes[pc++];
+        env.setLocal(local, env.popStack());
+        break;
+      }
+
       case BC.Opcode.LoadInteger: {
         const value = bytecodes[pc++];
         const constant = new IR.NumberConstantNode(value);
@@ -207,15 +239,10 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
       case BC.Opcode.Jump: {
         const target = bytecodes[pc++];
         mergeTo(target, env);
-        // Mark the environment as unreachable.
+        // TODO Mark the environment as unreachable.
         env = null;
         break;
       }
-
-      case BC.Opcode.JumpLoop:
-      case BC.Opcode.JumpIfTrue:
-      case BC.Opcode.Call:
-        throw new Error(`Not implemented yet ${BC.Opcode[opcode]}`);
 
       case BC.Opcode.Return: {
         const value = env.popStack();
@@ -224,6 +251,13 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
         // TODO set the environment to be unreachable.
         break;
       }
+
+      case BC.Opcode.JumpLoop:
+      case BC.Opcode.JumpIfTrue:
+      case BC.Opcode.Call:
+
+      default:
+        throw new Error(`Not implemented yet ${BC.Opcode[opcode]}`);
     }
   }
   return graph;

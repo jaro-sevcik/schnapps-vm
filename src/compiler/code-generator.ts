@@ -153,9 +153,11 @@ export function generateCode(
 
   // Stack of basic block targets.
   const control_flow_stack : IR.BasicBlock[] = [];
+
   function depthOfBlock(bb : IR.BasicBlock) {
     return control_flow_stack.length - control_flow_stack.indexOf(bb) - 1;
   }
+
   function tryPopStack() {
     while (control_flow_stack.length > 0) {
       const top = control_flow_stack[control_flow_stack.length - 1];
@@ -166,6 +168,7 @@ export function generateCode(
       sequence.add(a);
     }
   }
+
   // Outstanding branch counts, indexed by basic blocks.
   // For each basic block, the array contains the number of
   // branches to the block that have not been emitted yet.
@@ -173,7 +176,7 @@ export function generateCode(
   const reverseBlockOrder = computeReverseBlockOrder(graph.entry);
   for (let i = 0; i < reverseBlockOrder.length; i++) {
     const bb = reverseBlockOrder[i];
-    // TODO Handle phis from successors.
+
     let last = bb.nodes.length - 1;
     const last_node = bb.nodes[last];
     switch (last_node.opcode) {
@@ -206,6 +209,27 @@ export function generateCode(
           assert.strictEqual(bb.successors.length, 0);
         }
         break;
+    }
+
+    // TODO factor into a separate function/class.
+    if (bb.successors.length > 0) {
+      if (bb.successors[0].predecessors.length > 1) {
+        const a = new InstructionAssembler();
+        // Check that we are in split edge form.
+        assert.strictEqual(bb.successors.length, 1);
+        const succ = bb.successors[0];
+        // Find out which predessor is {bb}.
+        const pred_index = succ.predecessors.indexOf(bb);
+        for (const n of succ.nodes) {
+          // When we hit a non-phi node, we are done with the
+          // initial sequence of phis.
+          if (n.opcode !== IR.Opcode.kPhi) break;
+          const source = n.inputs[pred_index];
+          a.getLocal(sequence.getLocalIndex(source));
+          a.setLocal(sequence.getLocalIndex(n));
+        }
+        sequence.add(a);
+      }
     }
 
     tryPopStack();
@@ -272,9 +296,12 @@ function generateCodeForNode(
   }
 
   switch (node.opcode) {
+    case IR.Opcode.kPhi:
+      // Ignore phis, they are handled separately at block boundary.
+      break;
+
     case IR.Opcode.kGoto:
     case IR.Opcode.kBranch:
-    case IR.Opcode.kPhi:
       throw new Error(
         `Codegen: Unsupported ${node.id}:${IR.Opcode[node.opcode]}`);
 
