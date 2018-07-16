@@ -142,6 +142,8 @@ export function execute(stack : Float64Array,
         jumpTo(target);
         break;
       }
+      case Opcode.LoopHeader:
+        break;
       case Opcode.JumpIfTrue: {
         const target = bytecodes[pc++];
         if (popStack() !== 0) {

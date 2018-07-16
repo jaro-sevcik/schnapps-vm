@@ -14,11 +14,10 @@ export enum Opcode {
   TestLessThan,
   TestLessThanOrEqual,
   Jump,
-  JumpLoop,
   JumpIfTrue,
   JumpIfFalse,
-  Print,
-  Time,
+  LoopHeader,
+  JumpLoop,
   Call,
   Return,
 }
@@ -65,11 +64,11 @@ function register(opcode : Opcode, ...operands : OperandKind[]) {
   register(o.TestLessThan);
   register(o.TestLessThanOrEqual);
   register(o.Jump, k.Label);
-  register(o.JumpLoop, k.Label);
   register(o.JumpIfTrue, k.Label);
   register(o.JumpIfFalse, k.Label);
+  register(o.JumpLoop, k.Label);
+  register(o.LoopHeader);
   register(o.Call, k.Constant, k.Count);
-  register(o.Print);
   register(o.Return);
 }
 

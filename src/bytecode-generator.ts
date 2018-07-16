@@ -231,6 +231,7 @@ class BytecodeGenerator {
   visitWhileStatement(s : Ast.WhileStatement) {
     const loop = new LabelOperand();
     this.bindLabel(loop);
+    this.emit([Opcode.LoopHeader]);
     // Visit the condition.
     this.visitExpression(s.test);
     const done = new LabelOperand();

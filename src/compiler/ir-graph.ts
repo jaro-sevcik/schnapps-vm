@@ -152,9 +152,12 @@ export class BasicBlock {
     predecessors : BasicBlock[] = [];
     nodes : Node[] = [];
 
-    constructor(graph : Graph) {
+    is_loop_header : boolean = false;
+
+    constructor(graph : Graph, is_loop_header : boolean = false) {
         this.graph = graph;
         this.id = graph.getNextBlockId();
+        this.is_loop_header = is_loop_header;
     }
 
     containsPhi(phi : Node) : boolean {
@@ -197,6 +200,9 @@ export class BasicBlock {
         }
         if (this.successors.length > 0) {
             s += ` (succ: ${this.blockListToString(this.successors)})`;
+        }
+        if (this.is_loop_header) {
+            s += ` (loop)`;
         }
         console.log(s);
         for (const n of this.nodes) {

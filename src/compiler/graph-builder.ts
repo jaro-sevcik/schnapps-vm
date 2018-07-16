@@ -86,8 +86,11 @@ class Environment {
     for (let i = 0; i < this.values.length; i++) {
       let value = this.values[i];
 
-      // If we are merging the same value, there is nothing to do.
-      if (value === other.values[i]) continue;
+      // If we are merging the same value and we are not merging to a loop
+      // header, then there is nothing to do.
+      if (value === other.values[i] && !this.getBlock().is_loop_header) {
+        continue;
+      }
 
       // If we have not created a phi for this value, do so now.
       if (value.opcode !== IR.Opcode.kPhi ||
@@ -101,6 +104,14 @@ class Environment {
 
       // Add the other value to the phi.
       (value as IR.PhiNode).appendInput(other.values[i]);
+    }
+  }
+
+  createPhisForLoop() {
+    for (let i = 0; i < this.values.length; i++) {
+      const value = new IR.PhiNode(this.values[i]);
+      this.getBlock().appendNode(value);
+      this.values[i] = value;
     }
   }
 
@@ -162,6 +173,7 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
 
   let pc = 0;
   while (pc < bytecode_array.bytecodes.length) {
+    const instruction_pc = pc;
     if (environments_to_merge.has(pc)) {
       // If there are some jumps/branches merging here, we need to
       // merge them with the current environment.
@@ -219,6 +231,7 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
         break;
       }
 
+      // Jumps, branches.
       case BC.Opcode.JumpIfFalse: {
         const target = bytecodes[pc++];
         const condition = env.popStack();
@@ -235,12 +248,30 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
         break;
       }
 
-      // Jumps, branches.
-      case BC.Opcode.Jump: {
+      case BC.Opcode.Jump:
+      case BC.Opcode.JumpLoop: {
         const target = bytecodes[pc++];
         mergeTo(target, env);
-        // TODO Mark the environment as unreachable.
         env = null;
+        break;
+      }
+
+      case BC.Opcode.LoopHeader: {
+        // Create an environment for the loop header, together with
+        // a basic block and phis.
+
+        // Create the loop header basic block and wire in the loop
+        // predecessor edge.
+        const loop_header = new IR.BasicBlock(graph, true);
+        env.getBlock().addSuccessor(loop_header);
+        // Create an environment for merging back edges.
+        const loop_header_env = env.copy();
+        loop_header_env.setBlock(loop_header);
+        loop_header_env.createPhisForLoop();
+        // Register the header environment for merging.
+        environments_to_merge.set(instruction_pc, loop_header_env);
+        // Create a copy of the environment for loop body.
+        env = loop_header_env.copy();
         break;
       }
 

@@ -47,7 +47,7 @@ test("simple_loop_exit_true", () => {
 
   g.entry.removeSuccessor(g.exit);
 
-  const l = new IR.BasicBlock(g);
+  const l = new IR.BasicBlock(g, true);
   const t = new IR.BasicBlock(g);
   const f = new IR.BasicBlock(g);
 
@@ -72,7 +72,7 @@ test("simple_loop_exit_false", () => {
 
   g.entry.removeSuccessor(g.exit);
 
-  const l = new IR.BasicBlock(g);
+  const l = new IR.BasicBlock(g, true);
   const t = new IR.BasicBlock(g);
   const f = new IR.BasicBlock(g);
 
@@ -98,9 +98,9 @@ test("nested_loop", () => {
 
   g.entry.removeSuccessor(g.exit);
 
-  const l = new IR.BasicBlock(g);
+  const l = new IR.BasicBlock(g, true);
   const t = new IR.BasicBlock(g);
-  const nl = new IR.BasicBlock(g);
+  const nl = new IR.BasicBlock(g, true);
   const nt = new IR.BasicBlock(g);
   const nf = new IR.BasicBlock(g);
   const f = new IR.BasicBlock(g);

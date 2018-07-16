@@ -127,9 +127,11 @@ function createWebassemblyFunction(
   builder.addImportedMemory("I", "imported_mem");
   builder.addType(WasmJit.kSig_d_i);
   const locals : WasmJit.ILocal[] = [];
+
   for (const l of sequence.localTypes) {
     locals.push({ count : 1, type : l });
   }
+
   builder.addFunction("load", WasmJit.kSig_d_i)
       .addLocals(locals)
       .addBody(code)  // --
@@ -232,19 +234,7 @@ export function generateCode(
       }
     }
 
-    tryPopStack();
-
     if (!generateCodeForNodes(bb.nodes, last, sequence)) return null;
-
-    // Pop all basic blocks that have all incoming branches resolved.
-    while (control_flow_stack.length > 0) {
-      const top_basic_block = control_flow_stack[control_flow_stack.length - 1];
-      if (outstanding_branch_counts[top_basic_block.id] === 0) {
-        control_flow_stack.pop();
-      } else {
-        break;
-      }
-    }
 
     // Push the current basic block and create a block end for it.
     control_flow_stack.push(bb);
@@ -254,8 +244,9 @@ export function generateCode(
       a.end();
       sequence.add(a);
     }
+
+    tryPopStack();
   }
-  tryPopStack();
   assert.strictEqual(control_flow_stack.length, 0);
 
   {
@@ -416,6 +407,7 @@ class Loops {
   infos : LoopInfo[] = [];
 
   addBackedge(backedge : IR.BasicBlock, header : IR.BasicBlock) {
+    assert.ok(header.is_loop_header);
     for (const l of this.infos) {
       if (l.header === header) {
         l.addBackedge(backedge);
