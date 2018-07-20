@@ -112,6 +112,11 @@ class InstructionAssembler {
     this.code.push(WasmJit.Opcode.kEnd);
   }
 
+  loop() {
+    this.code.push(WasmJit.Opcode.kLoop);
+    this.code.push(WasmJit.Type.kStmt);
+  }
+
   ret() {
     this.code.push(WasmJit.Opcode.kReturn);
   }
@@ -157,16 +162,22 @@ export function generateCode(
   const control_flow_stack : IR.BasicBlock[] = [];
 
   function depthOfBlock(bb : IR.BasicBlock) {
-    return control_flow_stack.length - control_flow_stack.indexOf(bb) - 1;
+    const pos = control_flow_stack.indexOf(bb);
+    assert.ok(pos >= 0);
+    return control_flow_stack.length - pos - 1;
   }
 
-  function tryPopStack() {
+  function tryPopStack(loop_header : IR.BasicBlock) {
     while (control_flow_stack.length > 0) {
       const top = control_flow_stack[control_flow_stack.length - 1];
-      if (outstanding_branch_counts[top.id] !== 0) break;
+      if (outstanding_branch_counts[top.id] !== 0 && loop_header !== top) break;
       control_flow_stack.pop();
       const a = new InstructionAssembler();
-      a.block();
+      if (loop_header === top) {
+        a.loop();
+      } else {
+        a.block();
+      }
       sequence.add(a);
     }
   }
@@ -179,6 +190,8 @@ export function generateCode(
   for (let i = 0; i < reverseBlockOrder.length; i++) {
     const bb = reverseBlockOrder[i];
 
+    // If the last instruction is a branch, emit the code for the branch
+    // here.
     let last = bb.nodes.length - 1;
     const last_node = bb.nodes[last];
     switch (last_node.opcode) {
@@ -201,12 +214,23 @@ export function generateCode(
       default:
         // Insert branch to the next block if necessary.
         if (bb.successors.length === 1) {
-          if (reverseBlockOrder[i - 1] !== bb.successors[0]) {
+          if (bb.successors[0].orderIndex <= bb.orderIndex) {
+            // Backedge of a loop.
             const a = new InstructionAssembler();
-            a.br(depthOfBlock(bb.successors[0]));
+            a.br(0);
+            a.end();
             sequence.add(a);
+            control_flow_stack.push(bb.successors[0]);
+            outstanding_branch_counts[bb.successors[0].id] = 1;
+          } else {
+            // Forward edge.
+            if (reverseBlockOrder[i - 1] !== bb.successors[0]) {
+              const a = new InstructionAssembler();
+              a.br(depthOfBlock(bb.successors[0]));
+              sequence.add(a);
+            }
+            outstanding_branch_counts[bb.successors[0].id]--;
           }
-          outstanding_branch_counts[bb.successors[0].id]--;
         } else {
           assert.strictEqual(bb.successors.length, 0);
         }
@@ -236,16 +260,17 @@ export function generateCode(
 
     if (!generateCodeForNodes(bb.nodes, last, sequence)) return null;
 
+    tryPopStack(bb.is_loop_header ? bb : null);
+
     // Push the current basic block and create a block end for it.
-    control_flow_stack.push(bb);
-    outstanding_branch_counts[bb.id] = bb.predecessors.length;
-    {
+    if (bb.predecessors.length > 0) {
+      control_flow_stack.push(bb);
+      outstanding_branch_counts[bb.id] =
+        bb.is_loop_header ? 1 : bb.predecessors.length;
       const a = new InstructionAssembler();
       a.end();
       sequence.add(a);
     }
-
-    tryPopStack();
   }
   assert.strictEqual(control_flow_stack.length, 0);
 
@@ -544,7 +569,8 @@ function computeReverseBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
   order.sort(compareBlockOrder);
 
   // Update the orderIndex field in basic blocks to reflect the new order.
-  order.forEach((v, i) => { v.orderIndex = i; });
+  const length = order.length;
+  order.forEach((v, i) => { v.orderIndex = length - i - 1; });
 
   return order;
 }

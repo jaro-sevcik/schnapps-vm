@@ -162,7 +162,6 @@ export class BasicBlock {
 
     containsPhi(phi : Node) : boolean {
       for (const n of this.nodes) {
-        console.log(`Test ${n.id} (${phi.id})`);
         if (n === phi) return true;
         if (n.opcode !== Opcode.kPhi) break;
       }
