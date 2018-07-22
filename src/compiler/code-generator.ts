@@ -14,10 +14,11 @@ export const kStackSlotLog2Size : number = 3;
 // Utility class for building instruction sequence in reverse.
 export class ReversedInstructionSequence {
   code : number[] = [];
-  nodeIdToLocal : number[] = [];
   localTypes : WasmJit.Type[] = [WasmJit.Type.kI32];
+
+  private nodeIdToLocal : number[] = [];
   // TODO somehow name this constant.
-  reservedLocals : number = 1;
+  private reservedLocals : number = 1;
 
   add(s : InstructionAssembler) {
     this.code.push(...s.code.reverse());
@@ -33,7 +34,6 @@ export class ReversedInstructionSequence {
     return localId;
   }
 }
-
 
 function createWebassemblyFunction(
     shared : SharedFunctionInfo,
@@ -64,67 +64,65 @@ function createWebassemblyFunction(
   return i.exports.exported;
 }
 
-export function generateCode(
-    shared : SharedFunctionInfo,
-    graph : IR.Graph,
-    memory : WebAssembly.Memory,
-    vm_flags : IVMFlags) : (f : number) => number  {
-  const sequence = new ReversedInstructionSequence();
-
-  // Stack of basic block targets.
-  const control_flow_stack : IR.BasicBlock[] = [];
-
-  function depthOfBlock(bb : IR.BasicBlock) {
-    const pos = control_flow_stack.indexOf(bb);
-    assert.ok(pos >= 0);
-    return control_flow_stack.length - pos - 1;
-  }
-
-  function tryPopStack(loop_header : IR.BasicBlock) {
-    while (control_flow_stack.length > 0) {
-      const top = control_flow_stack[control_flow_stack.length - 1];
-      if (outstanding_branch_counts[top.id] !== 0 && loop_header !== top) break;
-      control_flow_stack.pop();
-      const a = new InstructionAssembler();
-      if (loop_header === top) {
-        a.loop();
-      } else {
-        a.block();
-      }
-      sequence.add(a);
-    }
-  }
-
+// The {ControlFlowBuilder} class is used to emit control flow for basic
+// blocks. To emit the structured control flow, as dictated by Wasm, we
+// need to keep track of the control flow block stack.
+class ControlFlowBuilder {
+  // Stack of control flow statements. The elements are target basic blocks.
+  // Note that we are building in reverse order, so for forward branches,
+  // the corresponding elements have already been emitted, for loop back
+  // edges, the target basic blocks (i.e., loop headers) have not been
+  // emitted yet.
+  private control_flow_stack : IR.BasicBlock[] = [];
   // Outstanding branch counts, indexed by basic blocks.
   // For each basic block, the array contains the number of
   // branches to the block that have not been emitted yet.
-  const outstanding_branch_counts : number[] = [];
-  const reverseBlockOrder = computeReverseBlockOrder(graph.entry);
-  for (let i = 0; i < reverseBlockOrder.length; i++) {
-    const bb = reverseBlockOrder[i];
+  private outstanding_branch_counts : number[] = [];
+  private sequence : ReversedInstructionSequence;
 
-    // If the last instruction is a branch, emit the code for the branch
-    // here.
+  constructor(sequence : ReversedInstructionSequence) {
+    this.sequence = sequence;
+  }
+
+  emitBlockStart(bb : IR.BasicBlock) {
+    this.tryPopStack(bb);
+
+    // Push the current basic block and create a block end for it.
+    if (bb.predecessors.length > 0) {
+      this.control_flow_stack.push(bb);
+      this.outstanding_branch_counts[bb.id] =
+        bb.is_loop_header ? 1 : bb.predecessors.length;
+      const a = new InstructionAssembler();
+      a.end();
+      this.sequence.add(a);
+    }
+  }
+
+  // Returns the largest index of a non-branch instruction. That is an index
+  // where the code generation should continue next.
+  emitBlockEnd(bb : IR.BasicBlock) : number {
     let last = bb.nodes.length - 1;
     const last_node = bb.nodes[last];
+
     switch (last_node.opcode) {
       case IR.Opcode.kBranch: {
         const a = new InstructionAssembler();
-        a.getLocal(sequence.getLocalIndex(last_node.inputs[0]));
+        a.getLocal(this.sequence.getLocalIndex(last_node.inputs[0]));
         a.f64Constant(0);
         a.f64Eq();
-        a.brIf(depthOfBlock(bb.successors[0]));
-        if (reverseBlockOrder[i - 1] !== bb.successors[0]) {
-          a.br(depthOfBlock(bb.successors[1]));
+        a.brIf(this.depthOfBlock(bb.successors[0]));
+        // Omit the fallthrough jump if target is the immediate successor.
+        if (bb.orderIndex + 1 !== bb.successors[0].orderIndex) {
+          a.br(this.depthOfBlock(bb.successors[1]));
         }
-        sequence.add(a);
-        outstanding_branch_counts[bb.successors[0].id]--;
-        outstanding_branch_counts[bb.successors[1].id]--;
+        this.sequence.add(a);
+        this.outstanding_branch_counts[bb.successors[0].id]--;
+        this.outstanding_branch_counts[bb.successors[1].id]--;
 
         last--;
         break;
       }
-      default:
+      default: {
         // Insert branch to the next block if necessary.
         if (bb.successors.length === 1) {
           if (bb.successors[0].orderIndex <= bb.orderIndex) {
@@ -132,25 +130,33 @@ export function generateCode(
             const a = new InstructionAssembler();
             a.br(0);
             a.end();
-            sequence.add(a);
-            control_flow_stack.push(bb.successors[0]);
-            outstanding_branch_counts[bb.successors[0].id] = 1;
+            this.sequence.add(a);
+            this.control_flow_stack.push(bb.successors[0]);
+            this.outstanding_branch_counts[bb.successors[0].id] = 1;
           } else {
-            // Forward edge.
-            if (reverseBlockOrder[i - 1] !== bb.successors[0]) {
+            // Forward edge, omit if target is the immediate successor.
+            if (bb.orderIndex + 1 !== bb.successors[0].orderIndex) {
               const a = new InstructionAssembler();
-              a.br(depthOfBlock(bb.successors[0]));
-              sequence.add(a);
+              a.br(this.depthOfBlock(bb.successors[0]));
+              this.sequence.add(a);
             }
-            outstanding_branch_counts[bb.successors[0].id]--;
+            this.outstanding_branch_counts[bb.successors[0].id]--;
           }
         } else {
           assert.strictEqual(bb.successors.length, 0);
         }
         break;
+      }
     }
 
-    // TODO factor into a separate function/class.
+    this.buildPhiMoves(bb);
+
+    return last;
+  }
+
+  finished() : boolean { return this.control_flow_stack.length === 0; }
+
+  private buildPhiMoves(bb : IR.BasicBlock) {
     if (bb.successors.length > 0) {
       if (bb.successors[0].predecessors.length > 1) {
         const a = new InstructionAssembler();
@@ -164,28 +170,60 @@ export function generateCode(
           // initial sequence of phis.
           if (n.opcode !== IR.Opcode.kPhi) break;
           const source = n.inputs[pred_index];
-          a.getLocal(sequence.getLocalIndex(source));
-          a.setLocal(sequence.getLocalIndex(n));
+          a.getLocal(this.sequence.getLocalIndex(source));
+          a.setLocal(this.sequence.getLocalIndex(n));
         }
-        sequence.add(a);
+        this.sequence.add(a);
       }
     }
+  }
 
-    if (!generateCodeForNodes(bb.nodes, last, sequence)) return null;
-
-    tryPopStack(bb.is_loop_header ? bb : null);
-
-    // Push the current basic block and create a block end for it.
-    if (bb.predecessors.length > 0) {
-      control_flow_stack.push(bb);
-      outstanding_branch_counts[bb.id] =
-        bb.is_loop_header ? 1 : bb.predecessors.length;
+  private tryPopStack(current_block : IR.BasicBlock) {
+    while (this.control_flow_stack.length > 0) {
+      const top = this.control_flow_stack[this.control_flow_stack.length - 1];
+      if (this.outstanding_branch_counts[top.id] !== 0 &&
+          current_block !== top) {
+        break;
+      }
+      this.control_flow_stack.pop();
       const a = new InstructionAssembler();
-      a.end();
-      sequence.add(a);
+      if (current_block === top) {
+        assert.ok(current_block.is_loop_header);
+        a.loop();
+      } else {
+        a.block();
+      }
+      this.sequence.add(a);
     }
   }
-  assert.strictEqual(control_flow_stack.length, 0);
+
+  private depthOfBlock(bb : IR.BasicBlock) : number {
+    const pos = this.control_flow_stack.indexOf(bb);
+    assert.ok(pos >= 0);
+    return this.control_flow_stack.length - pos - 1;
+  }
+}
+
+export function generateCode(
+    shared : SharedFunctionInfo,
+    graph : IR.Graph,
+    memory : WebAssembly.Memory,
+    vm_flags : IVMFlags) : (f : number) => number  {
+  const sequence = new ReversedInstructionSequence();
+
+  const control_flow_builder = new ControlFlowBuilder(sequence);
+
+  const reverseBlockOrder = computeReverseBlockOrder(graph.entry);
+  for (const bb of reverseBlockOrder) {
+    // Emit code for the block end, such as branches or phi moves.
+    const last = control_flow_builder.emitBlockEnd(bb);
+    // Generate code for the normal (non-branch, non-phi) nodes.
+    if (!generateCodeForNodes(bb.nodes, last, sequence)) return null;
+    // Emit code for block start, e.g., structure control flow block/loop
+    // start or end.
+    control_flow_builder.emitBlockStart(bb);
+  }
+  assert.ok(control_flow_builder.finished());
 
   {
     // Emit prologue.
