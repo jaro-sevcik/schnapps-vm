@@ -9,9 +9,9 @@ export class VirtualMachine {
     const ast = Parser.parse(code, { loc: true });
     const memory = new WebAssembly.Memory({ initial : 16, maximum : 16 });
     const stack = new Float64Array(memory.buffer);
-    const bytecode_array =
+    const bytecodeArray =
         BytecodeGenerator.generate(ast, memory, config);
-    const shared = new SharedFunctionInfo("<top-level>", bytecode_array, 0);
+    const shared = new SharedFunctionInfo("<top-level>", bytecodeArray, 0);
     stack[0] = -1;
     Interpreter.execute(stack, memory, 0, shared, config.flags);
   }

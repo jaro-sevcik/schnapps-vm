@@ -6,8 +6,8 @@ export class Graph {
     nextBlockId : number = 0;
     nextNodeId : number = 0;
 
-    constructor(parameter_count : number) {
-        this.entry = new GraphStartBlock(parameter_count, this);
+    constructor(parameterCount : number) {
+        this.entry = new GraphStartBlock(parameterCount, this);
         this.exit = new BasicBlock(this);
         this.entry.addSuccessor(this.exit);
     }
@@ -152,12 +152,12 @@ export class BasicBlock {
     predecessors : BasicBlock[] = [];
     nodes : Node[] = [];
 
-    is_loop_header : boolean = false;
+    isLoopHeader : boolean = false;
 
-    constructor(graph : Graph, is_loop_header : boolean = false) {
+    constructor(graph : Graph, isLoopHeader : boolean = false) {
         this.graph = graph;
         this.id = graph.getNextBlockId();
-        this.is_loop_header = is_loop_header;
+        this.isLoopHeader = isLoopHeader;
     }
 
     containsPhi(phi : Node) : boolean {
@@ -179,13 +179,13 @@ export class BasicBlock {
     }
 
     removeSuccessor(successor : BasicBlock) {
-      const successor_index = this.successors.indexOf(successor);
-      assert.notStrictEqual(successor_index, -1);
-      this.successors.splice(successor_index, 1);
+      const successorIndex = this.successors.indexOf(successor);
+      assert.notStrictEqual(successorIndex, -1);
+      this.successors.splice(successorIndex, 1);
 
-      const predecessor_index = successor.predecessors.indexOf(this);
-      assert.notStrictEqual(predecessor_index, -1);
-      successor.predecessors.splice(predecessor_index, 1);
+      const predecessorIndex = successor.predecessors.indexOf(this);
+      assert.notStrictEqual(predecessorIndex, -1);
+      successor.predecessors.splice(predecessorIndex, 1);
     }
 
     blockListToString(l : BasicBlock[]) {
@@ -200,7 +200,7 @@ export class BasicBlock {
         if (this.successors.length > 0) {
             s += ` (succ: ${this.blockListToString(this.successors)})`;
         }
-        if (this.is_loop_header) {
+        if (this.isLoopHeader) {
             s += ` (loop)`;
         }
         console.log(s);
@@ -214,9 +214,9 @@ export class GraphStartBlock extends BasicBlock {
     parameters : Node[] = [];
     undefinedConstant : Node;
 
-    constructor(parameter_count : number, graph : Graph) {
+    constructor(parameterCount : number, graph : Graph) {
         super(graph);
-        for (let i = 0; i < parameter_count; i++) {
+        for (let i = 0; i < parameterCount; i++) {
             const p = new ParameterNode(i);
             this.parameters.push(p);
             this.appendNode(p);

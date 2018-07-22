@@ -7,60 +7,60 @@ import { IVMFlags } from "./vm-config";
 
 export function execute(stack : Float64Array,
                         memory : WebAssembly.Memory,
-                        frame_ptr : number,
+                        framePtr : number,
                         shared : SharedFunctionInfo,
-                        vm_flags : IVMFlags) : number {
-  if (shared.bytecode.profile_counter > JIT.kCompileTickCount) {
+                        vmFlags : IVMFlags) : number {
+  if (shared.bytecode.profileCounter > JIT.kCompileTickCount) {
     // Optimize the code, and call the optimized code.
-    shared.bytecode.profile_counter = 0;
-    if (shared.isOptimizable() && JIT.compile(shared, memory, vm_flags)) {
-      return shared.code(frame_ptr);
+    shared.bytecode.profileCounter = 0;
+    if (shared.isOptimizable() && JIT.compile(shared, memory, vmFlags)) {
+      return shared.code(framePtr);
     }
   }
 
   let pc = 0;
-  const bytecode_array = shared.bytecode;
-  const bytecodes = bytecode_array.bytecodes;
-  const constants = bytecode_array.constants;
-  stack[frame_ptr + 1] = 0;  // Reserved for function.
+  const bytecodeArray = shared.bytecode;
+  const bytecodes = bytecodeArray.bytecodes;
+  const constants = bytecodeArray.constants;
+  stack[framePtr + 1] = 0;  // Reserved for function.
   for (let i = Bytecode.fixedSlotCount;
-       i < bytecode_array.register_count; i++) {
-    stack[frame_ptr + i] = 0;
+       i < bytecodeArray.registerCount; i++) {
+    stack[framePtr + i] = 0;
   }
 
-  let stack_ptr = frame_ptr + bytecode_array.register_count;
+  let stackPtr = framePtr + bytecodeArray.registerCount;
 
   function setLocal(i : number, value : number) {
-    assert.ok(i < bytecode_array.register_count);
-    assert.ok(-i - 1 < shared.parameter_count);
-    stack[frame_ptr + i] = value;
+    assert.ok(i < bytecodeArray.registerCount);
+    assert.ok(-i - 1 < shared.parameterCount);
+    stack[framePtr + i] = value;
   }
 
   function getLocal(i : number) : number {
-    assert.ok(i < bytecode_array.register_count);
-    assert.ok(-i - 1 < shared.parameter_count);
-    return stack[frame_ptr + i] as number;
+    assert.ok(i < bytecodeArray.registerCount);
+    assert.ok(-i - 1 < shared.parameterCount);
+    return stack[framePtr + i] as number;
   }
 
   function pushStack(value : number) {
-    stack[stack_ptr++] = value;
+    stack[stackPtr++] = value;
   }
 
   function popStack() {
-    return stack[--stack_ptr] as number;
+    return stack[--stackPtr] as number;
 
   }
   function getStackTop() {
-    return stack[stack_ptr - 1] as number;
+    return stack[stackPtr - 1] as number;
   }
 
   function drop(n : number) {
-    stack_ptr -= n;
+    stackPtr -= n;
   }
 
-  function jumpTo(new_pc : number) {
-    bytecode_array.profile_counter += pc - new_pc;
-    pc = new_pc;
+  function jumpTo(newPc : number) {
+    bytecodeArray.profileCounter += pc - newPc;
+    pc = newPc;
   }
 
   while (pc < bytecodes.length) {
@@ -161,20 +161,20 @@ export function execute(stack : Float64Array,
       case Opcode.Call: {
         // Read operands.
         const callee = constants[bytecodes[pc++]];
-        const args_count = bytecodes[pc++];
+        const argsCount = bytecodes[pc++];
 
         // Store the frame point on the stack.
-        stack[stack_ptr] = frame_ptr;
+        stack[stackPtr] = framePtr;
         // Call the function, passing its frame pointer to it.
-        const result = callee.code(stack_ptr);
+        const result = callee.code(stackPtr);
         // Remove the frame arguments from the stack.
-        drop(args_count);
+        drop(argsCount);
         // Push the return value on the stack.
         pushStack(result);
         break;
       }
       case Opcode.Return: {
-        bytecode_array.profile_counter += pc;
+        bytecodeArray.profileCounter += pc;
         return popStack();
       }
       default:

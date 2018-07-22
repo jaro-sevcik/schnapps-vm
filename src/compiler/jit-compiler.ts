@@ -8,18 +8,18 @@ export const kCompileTickCount : number = 1000;
 export function tryCompile(
       shared : SharedFunctionInfo,
       memory : WebAssembly.Memory,
-      vm_flags : IVMFlags) : (f : number) => number {
+      vmFlags : IVMFlags) : (f : number) => number {
     // Build graph.
     const graph = buildGraph(shared);
     if (!graph) return null;
 
-    if (vm_flags.printGraph) {
+    if (vmFlags.printGraph) {
       console.log(`>>> Graph for "${shared.name}".`);
       graph.print();
     }
 
     // Generate code.
-    const code = generateCode(shared, graph, memory, vm_flags);
+    const code = generateCode(shared, graph, memory, vmFlags);
     if (!code) {
       return null;
     }
@@ -29,8 +29,8 @@ export function tryCompile(
 
 export function compile(shared : SharedFunctionInfo,
                         memory : WebAssembly.Memory,
-                        trace_flags : IVMFlags) : boolean {
-  const code = tryCompile(shared, memory, trace_flags);
+                        traceFlags : IVMFlags) : boolean {
+  const code = tryCompile(shared, memory, traceFlags);
   if (code) {
     shared.code = code;
     return true;

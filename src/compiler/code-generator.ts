@@ -12,7 +12,7 @@ import { IVMFlags } from "./../vm-config";
 export const kStackSlotLog2Size : number = 3;
 
 // Utility class for building instruction sequence in reverse.
-export class ReversedInstructionSequence {
+class ReversedInstructionSequence {
   code : number[] = [];
   localTypes : WasmJit.Type[] = [WasmJit.Type.kI32];
 
@@ -39,7 +39,7 @@ function createWebassemblyFunction(
     shared : SharedFunctionInfo,
     sequence : ReversedInstructionSequence,
     mem : WebAssembly.Memory,
-    vm_flags : IVMFlags) {
+    vmFlags : IVMFlags) {
   const builder = new WasmJit.ModuleBuilder();
   const code = sequence.code.reverse();
   builder.addImportedMemory("I", "imported_mem");
@@ -54,7 +54,7 @@ function createWebassemblyFunction(
       .addLocals(locals)
       .addBody(code)  // --
       .exportAs("exported");
-  if (vm_flags.printCode) {
+  if (vmFlags.printCode) {
     console.log(`>>> Code for "${shared.name}".`);
     console.log(
         Wabt.readWasm(new Uint8Array(builder.toBuffer()), {}).toText({}));
@@ -73,11 +73,11 @@ class ControlFlowBuilder {
   // the corresponding elements have already been emitted, for loop back
   // edges, the target basic blocks (i.e., loop headers) have not been
   // emitted yet.
-  private control_flow_stack : IR.BasicBlock[] = [];
+  private controlFlowStack : IR.BasicBlock[] = [];
   // Outstanding branch counts, indexed by basic blocks.
   // For each basic block, the array contains the number of
   // branches to the block that have not been emitted yet.
-  private outstanding_branch_counts : number[] = [];
+  private outstandingBranchCounts : number[] = [];
   private sequence : ReversedInstructionSequence;
 
   constructor(sequence : ReversedInstructionSequence) {
@@ -89,9 +89,9 @@ class ControlFlowBuilder {
 
     // Push the current basic block and create a block end for it.
     if (bb.predecessors.length > 0) {
-      this.control_flow_stack.push(bb);
-      this.outstanding_branch_counts[bb.id] =
-        bb.is_loop_header ? 1 : bb.predecessors.length;
+      this.controlFlowStack.push(bb);
+      this.outstandingBranchCounts[bb.id] =
+        bb.isLoopHeader ? 1 : bb.predecessors.length;
       const a = new InstructionAssembler();
       a.end();
       this.sequence.add(a);
@@ -102,12 +102,12 @@ class ControlFlowBuilder {
   // where the code generation should continue next.
   emitBlockEnd(bb : IR.BasicBlock) : number {
     let last = bb.nodes.length - 1;
-    const last_node = bb.nodes[last];
+    const lastNode = bb.nodes[last];
 
-    switch (last_node.opcode) {
+    switch (lastNode.opcode) {
       case IR.Opcode.kBranch: {
         const a = new InstructionAssembler();
-        a.getLocal(this.sequence.getLocalIndex(last_node.inputs[0]));
+        a.getLocal(this.sequence.getLocalIndex(lastNode.inputs[0]));
         a.f64Constant(0);
         a.f64Eq();
         a.brIf(this.depthOfBlock(bb.successors[0]));
@@ -116,8 +116,8 @@ class ControlFlowBuilder {
           a.br(this.depthOfBlock(bb.successors[1]));
         }
         this.sequence.add(a);
-        this.outstanding_branch_counts[bb.successors[0].id]--;
-        this.outstanding_branch_counts[bb.successors[1].id]--;
+        this.outstandingBranchCounts[bb.successors[0].id]--;
+        this.outstandingBranchCounts[bb.successors[1].id]--;
 
         last--;
         break;
@@ -131,8 +131,8 @@ class ControlFlowBuilder {
             a.br(0);
             a.end();
             this.sequence.add(a);
-            this.control_flow_stack.push(bb.successors[0]);
-            this.outstanding_branch_counts[bb.successors[0].id] = 1;
+            this.controlFlowStack.push(bb.successors[0]);
+            this.outstandingBranchCounts[bb.successors[0].id] = 1;
           } else {
             // Forward edge, omit if target is the immediate successor.
             if (bb.orderIndex + 1 !== bb.successors[0].orderIndex) {
@@ -140,7 +140,7 @@ class ControlFlowBuilder {
               a.br(this.depthOfBlock(bb.successors[0]));
               this.sequence.add(a);
             }
-            this.outstanding_branch_counts[bb.successors[0].id]--;
+            this.outstandingBranchCounts[bb.successors[0].id]--;
           }
         } else {
           assert.strictEqual(bb.successors.length, 0);
@@ -154,7 +154,7 @@ class ControlFlowBuilder {
     return last;
   }
 
-  finished() : boolean { return this.control_flow_stack.length === 0; }
+  finished() : boolean { return this.controlFlowStack.length === 0; }
 
   private buildPhiMoves(bb : IR.BasicBlock) {
     if (bb.successors.length > 0) {
@@ -164,12 +164,12 @@ class ControlFlowBuilder {
         assert.strictEqual(bb.successors.length, 1);
         const succ = bb.successors[0];
         // Find out which predessor is {bb}.
-        const pred_index = succ.predecessors.indexOf(bb);
+        const predIndex = succ.predecessors.indexOf(bb);
         for (const n of succ.nodes) {
           // When we hit a non-phi node, we are done with the
           // initial sequence of phis.
           if (n.opcode !== IR.Opcode.kPhi) break;
-          const source = n.inputs[pred_index];
+          const source = n.inputs[predIndex];
           a.getLocal(this.sequence.getLocalIndex(source));
           a.setLocal(this.sequence.getLocalIndex(n));
         }
@@ -178,17 +178,17 @@ class ControlFlowBuilder {
     }
   }
 
-  private tryPopStack(current_block : IR.BasicBlock) {
-    while (this.control_flow_stack.length > 0) {
-      const top = this.control_flow_stack[this.control_flow_stack.length - 1];
-      if (this.outstanding_branch_counts[top.id] !== 0 &&
-          current_block !== top) {
+  private tryPopStack(currentBlock : IR.BasicBlock) {
+    while (this.controlFlowStack.length > 0) {
+      const top = this.controlFlowStack[this.controlFlowStack.length - 1];
+      if (this.outstandingBranchCounts[top.id] !== 0 &&
+          currentBlock !== top) {
         break;
       }
-      this.control_flow_stack.pop();
+      this.controlFlowStack.pop();
       const a = new InstructionAssembler();
-      if (current_block === top) {
-        assert.ok(current_block.is_loop_header);
+      if (currentBlock === top) {
+        assert.ok(currentBlock.isLoopHeader);
         a.loop();
       } else {
         a.block();
@@ -198,9 +198,9 @@ class ControlFlowBuilder {
   }
 
   private depthOfBlock(bb : IR.BasicBlock) : number {
-    const pos = this.control_flow_stack.indexOf(bb);
+    const pos = this.controlFlowStack.indexOf(bb);
     assert.ok(pos >= 0);
-    return this.control_flow_stack.length - pos - 1;
+    return this.controlFlowStack.length - pos - 1;
   }
 }
 
@@ -208,22 +208,22 @@ export function generateCode(
     shared : SharedFunctionInfo,
     graph : IR.Graph,
     memory : WebAssembly.Memory,
-    vm_flags : IVMFlags) : (f : number) => number  {
+    vmFlags : IVMFlags) : (f : number) => number  {
   const sequence = new ReversedInstructionSequence();
 
-  const control_flow_builder = new ControlFlowBuilder(sequence);
+  const controlFlowBuilder = new ControlFlowBuilder(sequence);
 
   const reverseBlockOrder = computeReverseBlockOrder(graph.entry);
   for (const bb of reverseBlockOrder) {
     // Emit code for the block end, such as branches or phi moves.
-    const last = control_flow_builder.emitBlockEnd(bb);
+    const last = controlFlowBuilder.emitBlockEnd(bb);
     // Generate code for the normal (non-branch, non-phi) nodes.
     if (!generateCodeForNodes(bb.nodes, last, sequence)) return null;
     // Emit code for block start, e.g., structure control flow block/loop
     // start or end.
-    control_flow_builder.emitBlockStart(bb);
+    controlFlowBuilder.emitBlockStart(bb);
   }
-  assert.ok(control_flow_builder.finished());
+  assert.ok(controlFlowBuilder.finished());
 
   {
     // Emit prologue.
@@ -236,7 +236,7 @@ export function generateCode(
     sequence.add(a);
   }
 
-  return createWebassemblyFunction(shared, sequence, memory, vm_flags);
+  return createWebassemblyFunction(shared, sequence, memory, vmFlags);
 }
 
 function generateCodeForNode(
@@ -383,7 +383,7 @@ class Loops {
   infos : LoopInfo[] = [];
 
   addBackedge(backedge : IR.BasicBlock, header : IR.BasicBlock) {
-    assert.ok(header.is_loop_header);
+    assert.ok(header.isLoopHeader);
     for (const l of this.infos) {
       if (l.header === header) {
         l.addBackedge(backedge);
@@ -490,15 +490,15 @@ function computeReverseBlockOrder(entry : IR.BasicBlock) : IR.BasicBlock[] {
   // the order of the containing loop first, so that basic blocks from
   // the same loop are kept together.
   function compareBlockOrder(left : IR.BasicBlock, right : IR.BasicBlock) {
-    const left_order = getOrderIndexStack(left);
-    const right_order = getOrderIndexStack(right);
-    const end = Math.min(left_order.length, right_order.length);
+    const leftOrder = getOrderIndexStack(left);
+    const rightOrder = getOrderIndexStack(right);
+    const end = Math.min(leftOrder.length, rightOrder.length);
     for (let i = 0; i < end; i++) {
-      if (left_order[i] > right_order[i]) return 1;
-      if (left_order[i] < right_order[i]) return -1;
+      if (leftOrder[i] > rightOrder[i]) return 1;
+      if (leftOrder[i] < rightOrder[i]) return -1;
     }
-    if (left_order.length < right_order.length) return 1;
-    if (left_order.length > right_order.length) return -1;
+    if (leftOrder.length < rightOrder.length) return 1;
+    if (leftOrder.length > rightOrder.length) return -1;
     return 0;
   }
 

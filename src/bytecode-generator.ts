@@ -120,9 +120,9 @@ class BytecodeGenerator {
     // TODO Return undefined rather than 0 here.
     this.emit([Opcode.LoadInteger, 0]);
     this.emit([Opcode.Return]);
-    const bytecode_array = new BytecodeArray(
+    const bytecodeArray = new BytecodeArray(
         this.bytecodes, this.localCount, this.constants);
-    f.shared.bytecode = bytecode_array;
+    f.shared.bytecode = bytecodeArray;
     return f.shared;
   }
 
@@ -166,35 +166,35 @@ class BytecodeGenerator {
   }
 
   defineArguments(params : Ast.Pattern[]) {
-    const arg0_index = - params.length;
+    const indexArg0 = - params.length;
     for (let i = 0; i < params.length; i++) {
       if (params[i].type !== "Identifier") {
         this.throwError(params[i],
           `Non-identifier parameters not supported.`);
       }
       const p = params[i] as Ast.Identifier;
-      this.variables.set(p.name, arg0_index + i);
+      this.variables.set(p.name, indexArg0 + i);
     }
   }
 
   // Helper for defining variables. It allocates a local for the
   // variable.
   defineVariable(n : Ast.Node, name : string) : number {
-    let variable_index;
+    let variableIndex;
     if (this.variables.has(name)) {
       // If the variable name already exists, let us use it.
       // TODO Remove this check as soon as we can assign functions
       // to locals.
-      if (typeof variable_index !== "number") {
+      if (typeof variableIndex !== "number") {
         this.throwError(n, `Variable ${name} duplicated as a function.`);
       }
-      variable_index = this.variables.get(name) as number;
+      variableIndex = this.variables.get(name) as number;
     } else {
       // Otherwise, allocate a fresh register for the variable.
-      variable_index = this.allocateLocalVariable();
-      this.variables.set(name, variable_index);
+      variableIndex = this.allocateLocalVariable();
+      this.variables.set(name, variableIndex);
     }
-    return variable_index;
+    return variableIndex;
   }
 
   visitFunctionDeclaration(d : Ast.FunctionDeclaration) {
@@ -221,10 +221,10 @@ class BytecodeGenerator {
       if (d.type !== "VariableDeclarator") this.throwError(d);
       if (d.id.type !== "Identifier") this.throwError(d.id);
       const id = d.id as Ast.Identifier;
-      const local_index = this.defineVariable(id, id.name);
+      const localIndex = this.defineVariable(id, id.name);
       // If init is not defined, we should store 'undefined'.
       this.visitExpression(d.init);
-      this.emit([Opcode.StoreLocal, local_index]);
+      this.emit([Opcode.StoreLocal, localIndex]);
     }
   }
 
@@ -242,19 +242,19 @@ class BytecodeGenerator {
   }
 
   visitIfStatement(s : Ast.IfStatement) {
-    const else_label = new LabelOperand();
+    const elseLabel = new LabelOperand();
     // Visit the condition.
     this.visitExpression(s.test);
-    this.emit([Opcode.JumpIfFalse, else_label]);
+    this.emit([Opcode.JumpIfFalse, elseLabel]);
     this.visitStatement(s.consequent);
     if (s.alternate) {
-      const done_label = new LabelOperand();
-      this.emit([Opcode.Jump, done_label]);
-      this.bindLabel(else_label);
+      const doneLabel = new LabelOperand();
+      this.emit([Opcode.Jump, doneLabel]);
+      this.bindLabel(elseLabel);
       this.visitStatement(s.alternate);
-      this.bindLabel(done_label);
+      this.bindLabel(doneLabel);
     } else {
-      this.bindLabel(else_label);
+      this.bindLabel(elseLabel);
     }
   }
 
@@ -295,12 +295,12 @@ class BytecodeGenerator {
 
   visitVariable(id : Ast.Identifier) {
     if (!this.variables.has(id.name)) this.throwError(id);
-    const local_index = this.variables.get(id.name);
-    if (typeof local_index !== "number") {
+    const localIndex = this.variables.get(id.name);
+    if (typeof localIndex !== "number") {
       // TODO Should not be an error.
       this.throwError(id, `Variable ${name} duplicated as a function.`);
     }
-    this.emit([Opcode.LoadLocal, local_index as number]);
+    this.emit([Opcode.LoadLocal, localIndex as number]);
   }
 
   visitLiteral(literal : Ast.Literal) {
@@ -318,9 +318,9 @@ class BytecodeGenerator {
     if (this.external.has(name)) {
       target = this.external.get(name);
     } else if (this.variables.has(name)) {
-      const target_var = this.variables.get(name);
-      if (target_var instanceof SharedFunctionInfo) {
-        target = target_var as SharedFunctionInfo;
+      const targetVar = this.variables.get(name);
+      if (targetVar instanceof SharedFunctionInfo) {
+        target = targetVar as SharedFunctionInfo;
       } else {
         this.throwError(e, `Unknown function "${name}".`);
       }
@@ -328,16 +328,16 @@ class BytecodeGenerator {
       this.throwError(e, `Unknown function "${name}".`);
     }
     // TODO(jarin) Argument adaptation?
-    if (e.arguments.length !== target.parameter_count) {
+    if (e.arguments.length !== target.parameterCount) {
       this.throwError(e,
         `Param count mismatch for function "${name}".`);
     }
-    for (let i = 0; i < target.parameter_count; i++) {
+    for (let i = 0; i < target.parameterCount; i++) {
       this.visitExpression(e.arguments[i] as Ast.Expression);
     }
     this.emit([Opcode.Call,
                this.createConstant(target),
-               target.parameter_count]);
+               target.parameterCount]);
   }
 
   visitAssignmentExpression(e : Ast.AssignmentExpression) {
@@ -345,13 +345,13 @@ class BytecodeGenerator {
     if (e.left.type !== "Identifier") this.throwError(e);
     const id = e.left as Ast.Identifier;
     if (!this.variables.has(id.name)) this.throwError(e);
-    const local_index = this.variables.get(id.name);
-    if (typeof local_index !== "number") {
+    const localIndex = this.variables.get(id.name);
+    if (typeof localIndex !== "number") {
       this.throwError(e, `Cannot assign to function ${name}.`);
     }
     this.visitExpression(e.right);
     this.emit([Opcode.Dup]);
-    this.emit([Opcode.StoreLocal, local_index as number]);
+    this.emit([Opcode.StoreLocal, localIndex as number]);
   }
 
   visitBinaryExpression(e : Ast.BinaryExpression) {
@@ -400,10 +400,10 @@ export function generate(program : Ast.Program,
     const foreign = f[1];
     // Create a trampoline that reads the arguments out from the stack
     // and passes them to the foreign function.
-    const trampoline = (frame_ptr : number) : number => {
+    const trampoline = (framePtr : number) : number => {
       const args = [];
       for (let i = 0; i < f[1].parameter_count; i++) {
-        args.push(stack[frame_ptr - 1 - i]);
+        args.push(stack[framePtr - 1 - i]);
       }
       return foreign.fn(...args);
     };
@@ -417,8 +417,8 @@ export function generate(program : Ast.Program,
   const functions : IFunctionToCompile[] = [];
 
   // Compile the top level code.
-  const toplevel_generator = new BytecodeGenerator(ffi, functions);
-  const result = toplevel_generator.compileProgram(program);
+  const toplevelGenerator = new BytecodeGenerator(ffi, functions);
+  const result = toplevelGenerator.compileProgram(program);
   if (config.flags.printBytecode) {
     console.log("Top level code:");
     printBytecodeArray(result);
@@ -428,8 +428,8 @@ export function generate(program : Ast.Program,
   while (functions.length > 0) {
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());
-    f.code = (frame_ptr : number) => {
-      return Interpreter.execute(stack, memory, frame_ptr, f, config.flags);
+    f.code = (framePtr : number) => {
+      return Interpreter.execute(stack, memory, framePtr, f, config.flags);
     };
     if (config.flags.printBytecode) {
       printSharedFunctionInfo(f);

@@ -3,19 +3,19 @@ import { printBytecode } from "./bytecode";
 export class BytecodeArray {
   bytecodes : number[];
   constants : SharedFunctionInfo[];
-  register_count : number;
-  profile_counter : number = 0;
+  registerCount : number;
+  profileCounter : number = 0;
 
-  constructor(bytecodes : number[], register_count : number,
+  constructor(bytecodes : number[], registerCount : number,
               constants : SharedFunctionInfo[]) {
     this.bytecodes = bytecodes;
-    this.register_count = register_count;
+    this.registerCount = registerCount;
     this.constants = constants;
   }
 }
 
 export function printBytecodeArray(a : BytecodeArray) {
-    console.log(`  Register count: ${a.register_count}`);
+    console.log(`  Register count: ${a.registerCount}`);
     printBytecode(a.bytecodes);
     // TODO Print constants.
 }
@@ -31,21 +31,21 @@ export enum FunctionFlags {
 }
 
 export class SharedFunctionInfo {
-    parameter_count : number;
+    parameterCount : number;
     bytecode : BytecodeArray;
     // TODO(jarin) This should eventually take the function so that
     // we do not have to pass it through a closure. Ideally, this
     // would point directy to the interpreter's execute function.
-    code : (frame_ptr : number) => number = undefined;
+    code : (framePtr : number) => number = undefined;
     name : string;
     flags : FunctionFlags = FunctionFlags.kOptimizable;
 
     constructor(name : string,
                 bytecode : BytecodeArray,
-                parameter_count : number)  {
+                parameterCount : number)  {
       this.name = name;
       this.bytecode = bytecode;
-      this.parameter_count = parameter_count;
+      this.parameterCount = parameterCount;
     }
 
     markCannotOptimize() {
@@ -58,7 +58,7 @@ export class SharedFunctionInfo {
 }
 
 export function printSharedFunctionInfo(f : SharedFunctionInfo) {
-    console.log(`Function ${f.name} (param count ${f.parameter_count}):`);
+    console.log(`Function ${f.name} (param count ${f.parameterCount}):`);
     if (f.bytecode) {
         printBytecodeArray(f.bytecode);
     } else {

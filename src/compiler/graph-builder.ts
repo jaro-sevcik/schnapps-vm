@@ -3,26 +3,26 @@ import * as BC from "./../bytecode";
 import * as IR from "./../compiler/ir-graph";
 import { SharedFunctionInfo } from "./../function";
 
-function InitialEnvironmentValues(start_block : IR.GraphStartBlock,
-                                  parameter_count : number,
-                                  local_count : number) : IR.Node[] {
+function InitialEnvironmentValues(startBlock : IR.GraphStartBlock,
+                                  parameterCount : number,
+                                  localCount : number) : IR.Node[] {
     const values : IR.Node[] = [];
     // Initialize parameters.
-    for (let i = 0; i < parameter_count; i++) {
-      values.push(start_block.getParameter(i));
+    for (let i = 0; i < parameterCount; i++) {
+      values.push(startBlock.getParameter(i));
     }
 
     // Initialize locals.
-    for (let i = 0; i < local_count; i++) {
-      values.push(start_block.getUndefinedConstant());
+    for (let i = 0; i < localCount; i++) {
+      values.push(startBlock.getUndefinedConstant());
     }
 
     return values;
 }
 
 class Environment {
-  private parameter_count : number;
-  private local_count : number;
+  private parameterCount : number;
+  private localCount : number;
   // Current basic block.
   private block : IR.BasicBlock;
   // Values in the environment. The values list is of the form
@@ -31,12 +31,12 @@ class Environment {
   private values : IR.Node[] = [];
 
   constructor(block : IR.BasicBlock,
-              parameter_count : number,
-              local_count : number,
+              parameterCount : number,
+              localCount : number,
               values : IR.Node[]) {
     this.block = block;
-    this.parameter_count = parameter_count;
-    this.local_count = local_count;
+    this.parameterCount = parameterCount;
+    this.localCount = localCount;
 
     // Initialize parameters.
     this.values = values.slice();
@@ -44,8 +44,8 @@ class Environment {
 
   copy() : Environment {
     return new Environment(this.block,
-                           this.parameter_count,
-                           this.local_count,
+                           this.parameterCount,
+                           this.localCount,
                            this.values);
   }
 
@@ -58,7 +58,7 @@ class Environment {
   }
 
   localIndexToValueIndex(index : number) {
-    return index + this.parameter_count;
+    return index + this.parameterCount;
   }
 
   getLocal(index : number) : IR.Node {
@@ -88,7 +88,7 @@ class Environment {
 
       // If we are merging the same value and we are not merging to a loop
       // header, then there is nothing to do.
-      if (value === other.values[i] && !this.getBlock().is_loop_header) {
+      if (value === other.values[i] && !this.getBlock().isLoopHeader) {
         continue;
       }
 
@@ -116,20 +116,20 @@ class Environment {
   }
 
   stackHeight() : number {
-    return this.values.length - this.parameter_count - this.local_count;
+    return this.values.length - this.parameterCount - this.localCount;
   }
 }
 
-function newEnvironment(start_block : IR.GraphStartBlock,
-                        first_block : IR.BasicBlock,
+function newEnvironment(startBlock : IR.GraphStartBlock,
+                        firstBlock : IR.BasicBlock,
                         shared : SharedFunctionInfo) : Environment {
-  const initial_values = InitialEnvironmentValues(
-      start_block,
-      shared.parameter_count,
-      shared.bytecode.register_count);
-  const env = new Environment(start_block, shared.parameter_count,
-                              shared.bytecode.register_count, initial_values);
-  env.setBlock(first_block);
+  const initialValues = InitialEnvironmentValues(
+      startBlock,
+      shared.parameterCount,
+      shared.bytecode.registerCount);
+  const env = new Environment(startBlock, shared.parameterCount,
+                              shared.bytecode.registerCount, initialValues);
+  env.setBlock(firstBlock);
   return env;
 }
 
@@ -148,39 +148,39 @@ const bytecodeOpToJSOpcode = new Map<BC.Opcode, IR.Opcode>([
 ]);
 
 export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
-  const bytecode_array = shared.bytecode;
-  const bytecodes = bytecode_array.bytecodes;
-  const constants = bytecode_array.constants;
-  const environments_to_merge = new Map<number, Environment>();
+  const bytecodeArray = shared.bytecode;
+  const bytecodes = bytecodeArray.bytecodes;
+  const constants = bytecodeArray.constants;
+  const environmentsToMerge = new Map<number, Environment>();
 
   function mergeTo(target : number, envToMerge : Environment) {
-    let target_environment;
-    if (!environments_to_merge.has(target)) {
+    let targetEnvironment;
+    if (!environmentsToMerge.has(target)) {
       const block = new IR.BasicBlock(graph);
       env.getBlock().addSuccessor(block);
-      target_environment = env.copy();
-      target_environment.setBlock(block);
-      environments_to_merge.set(target, target_environment);
+      targetEnvironment = env.copy();
+      targetEnvironment.setBlock(block);
+      environmentsToMerge.set(target, targetEnvironment);
     } else {
-      target_environment = environments_to_merge.get(target);
-      env.getBlock().addSuccessor(target_environment.getBlock());
-      target_environment.merge(envToMerge);
+      targetEnvironment = environmentsToMerge.get(target);
+      env.getBlock().addSuccessor(targetEnvironment.getBlock());
+      targetEnvironment.merge(envToMerge);
     }
   }
 
-  const graph = new IR.Graph(shared.parameter_count);
+  const graph = new IR.Graph(shared.parameterCount);
   let env = newEnvironment(graph.entry, graph.exit, shared);
 
   let pc = 0;
-  while (pc < bytecode_array.bytecodes.length) {
-    const instruction_pc = pc;
-    if (environments_to_merge.has(pc)) {
+  while (pc < bytecodeArray.bytecodes.length) {
+    const instructionPc = pc;
+    if (environmentsToMerge.has(pc)) {
       // If there are some jumps/branches merging here, we need to
       // merge them with the current environment.
       if (env) {
         mergeTo(pc, env);
       }
-      env = environments_to_merge.get(pc);
+      env = environmentsToMerge.get(pc);
     }
 
     const opcode = bytecodes[pc++];
@@ -242,9 +242,9 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
         mergeTo(target, env.copy());
 
         // Create a new basic block for fall-through.
-        const fallthrough_block = new IR.BasicBlock(graph);
-        env.getBlock().addSuccessor(fallthrough_block);
-        env.setBlock(fallthrough_block);
+        const fallthroughBlock = new IR.BasicBlock(graph);
+        env.getBlock().addSuccessor(fallthroughBlock);
+        env.setBlock(fallthroughBlock);
         break;
       }
 
@@ -262,23 +262,23 @@ export function buildGraph(shared : SharedFunctionInfo) : IR.Graph | undefined {
 
         // Create the loop header basic block and wire in the loop
         // predecessor edge.
-        const loop_header = new IR.BasicBlock(graph, true);
-        env.getBlock().addSuccessor(loop_header);
+        const loopHeader = new IR.BasicBlock(graph, true);
+        env.getBlock().addSuccessor(loopHeader);
         // Create an environment for merging back edges.
-        const loop_header_env = env.copy();
-        loop_header_env.setBlock(loop_header);
-        loop_header_env.createPhisForLoop();
+        const loopHeaderEnv = env.copy();
+        loopHeaderEnv.setBlock(loopHeader);
+        loopHeaderEnv.createPhisForLoop();
         // Register the header environment for merging.
-        environments_to_merge.set(instruction_pc, loop_header_env);
+        environmentsToMerge.set(instructionPc, loopHeaderEnv);
         // Create a copy of the environment for loop body.
-        env = loop_header_env.copy();
+        env = loopHeaderEnv.copy();
         break;
       }
 
       case BC.Opcode.Return: {
         const value = env.popStack();
-        const return_node = new IR.ReturnNode(value);
-        env.getBlock().appendNode(return_node);
+        const returnNode = new IR.ReturnNode(value);
+        env.getBlock().appendNode(returnNode);
         // TODO set the environment to be unreachable.
         break;
       }
