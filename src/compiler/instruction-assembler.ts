@@ -2,28 +2,6 @@ import * as WasmJit from "wasm-jit";
 
 import * as IR from "./../compiler/ir-graph";
 
-export class ReversedInstructionSequence {
-  code : number[] = [];
-  nodeIdToLocal : number[] = [];
-  localTypes : WasmJit.Type[] = [WasmJit.Type.kI32];
-  // TODO somehow name this constant.
-  reservedLocals : number = 1;
-
-  add(s : InstructionAssembler) {
-    this.code.push(...s.code.reverse());
-  }
-
-  getLocalIndex(node : IR.Node) : number {
-    let localId : undefined | number =  this.nodeIdToLocal[node.id];
-    if (!localId) {
-      localId = this.localTypes.length + this.reservedLocals;
-      this.localTypes.push(WasmJit.Type.kF64);
-      this.nodeIdToLocal[node.id] = localId;
-    }
-    return localId;
-  }
-}
-
 export class InstructionAssembler {
   code : number[] = [];
 

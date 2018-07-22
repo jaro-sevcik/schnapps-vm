@@ -4,12 +4,36 @@ import * as WasmJit from "wasm-jit";
 
 import {
   InstructionAssembler,
-  ReversedInstructionSequence } from "./../compiler/instruction-assembler";
+} from "./../compiler/instruction-assembler";
 import * as IR from "./../compiler/ir-graph";
 import { SharedFunctionInfo } from "./../function";
 import { IVMFlags } from "./../vm-config";
 
 export const kStackSlotLog2Size : number = 3;
+
+// Utility class for building instruction sequence in reverse.
+export class ReversedInstructionSequence {
+  code : number[] = [];
+  nodeIdToLocal : number[] = [];
+  localTypes : WasmJit.Type[] = [WasmJit.Type.kI32];
+  // TODO somehow name this constant.
+  reservedLocals : number = 1;
+
+  add(s : InstructionAssembler) {
+    this.code.push(...s.code.reverse());
+  }
+
+  getLocalIndex(node : IR.Node) : number {
+    let localId : undefined | number =  this.nodeIdToLocal[node.id];
+    if (!localId) {
+      localId = this.localTypes.length + this.reservedLocals;
+      this.localTypes.push(WasmJit.Type.kF64);
+      this.nodeIdToLocal[node.id] = localId;
+    }
+    return localId;
+  }
+}
+
 
 function createWebassemblyFunction(
     shared : SharedFunctionInfo,
