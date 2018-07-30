@@ -1,6 +1,7 @@
 import * as Parser from "esprima";
 import * as BytecodeGenerator from "./bytecode-generator";
 import { IForeignFunction, SharedFunctionInfo } from "./function";
+import * as Heap from "./heap/heap";
 import * as Interpreter from "./interpreter";
 import { VMConfig } from "./vm-config";
 
@@ -12,7 +13,8 @@ export class VirtualMachine {
     const bytecodeArray =
         BytecodeGenerator.generate(ast, memory, config);
     const shared = new SharedFunctionInfo("<top-level>", bytecodeArray, 0);
-    stack[0] = -1;
-    Interpreter.execute(stack, memory, 0, shared, config.flags);
+    const stackStart = Heap.HeapHeader.kHeapHeaderSize / Heap.kWordSize;
+    stack[stackStart] = -1;
+    Interpreter.execute(stack, memory, stackStart, shared, config.flags);
   }
 }
