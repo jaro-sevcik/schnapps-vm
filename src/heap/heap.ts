@@ -6,8 +6,9 @@ export class HeapHeader {
   static readonly kTopOffset = 0;
   static readonly kLimitOffset = HeapHeader.kTopOffset + kWordSize;
   static readonly kStartOffset = HeapHeader.kLimitOffset + kWordSize;
-  static readonly kHeapHeaderSize =
-    HeapHeader.kStartOffset + kWordSize;
+  static readonly kStackStartOffset = HeapHeader.kStartOffset + kWordSize;
+  static readonly kStackTopOffset = HeapHeader.kStackStartOffset + kWordSize;
+  static readonly kHeapHeaderSize = HeapHeader.kStackTopOffset + kWordSize;
 
   private address : number;
   private memory : DataView;
@@ -81,7 +82,20 @@ export class Heap {
   }
 
   mark() {
+    const markQueue : number[] = [];
+    this.scanRoots(markQueue);
+    while (markQueue.length > 0) {
+      const object = markQueue.pop();
+
+      // TODO
+      // For all slots in the object.
+      //  if (!marked(*slot)) { setmark(*slot); addtoqueue(*slot); }
+    }
     return;
+  }
+
+  scanRoots(markQueue : number[]) {
+    // TODO
   }
 
   sweep() {
