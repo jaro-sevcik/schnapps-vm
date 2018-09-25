@@ -87,27 +87,50 @@ function outputClass(def, defs, writeLn) {
     switch (f.kind) {
       case "plain": {
         let suffix = memSuffix.get(f.type);
+        let offset = `${def.name}.${f.name}Offset`;
         if (suffix) {
           writeLn(`  get ${f.name}() : number { ` + 
-                  `return view_.get${suffix}(this.address_); }`)
+                  `return this.baseGet${suffix}(${offset}); }`)
           writeLn(`  set ${f.name}(v : number) { ` +
-                  `return view_.set${suffix}(this.address_, v); }`)
+                  `return this.baseSet${suffix}(${offset}, v); }`)
         } else if (f.type === "tagged") {
           writeLn(`  get ${f.name}() : JSValue { ` + 
-                  `return view_.get${suffix}(this.address_); }`)
+                  `return this.baseGetTagged(${offset}); }`)
           writeLn(`  set ${f.name}(v : JSValue) { ` +
-                  `return view_.set${suffix}(this.address_, v); }`)
+                  `return this.baseSetTagged(${offset}, v); }`)
         } else if (defs.has(f.type)) {
+          // TODO This must somehow cast to the right return type.
           writeLn(`  get ${f.name}() : ${f.type} { ` + 
-                  `return view_.get${suffix}(this.address_); }`)
+                  `return this.baseGetTagged(${offset}); }`)
           writeLn(`  set ${f.name}(v : ${f.type}) { ` +
-                  `return view_.set${suffix}(this.address_, v); }`)          
+                  `return this.baseSetTagged(${offset}, v); }`)          
         } else {
           console.log("UNKNOW");
         }
         break;
       }
       case "array": {
+        let suffix = memSuffix.get(f.type);
+        let offset = `${def.name}.${f.name}Offset + i`;
+        if (suffix) {
+          writeLn(`  ${f.name}Get(i : number) : number { ` + 
+                  `return this.baseGet${suffix}(${offset}); }`)
+          writeLn(`  ${f.name}Set(i : number, v : number) { ` +
+                  `return this.baseSet${suffix}(${offset}, v); }`)
+        } else if (f.type === "tagged") {
+          writeLn(`  ${f.name}Get(i : number) : JSValue { ` + 
+                  `return this.baseGetTagged(${offset}); }`)
+          writeLn(`  ${f.name}Set(i : number, v : JSValue) { ` +
+                  `return this.baseSetTagged(${offset}, v); }`)
+        } else if (defs.has(f.type)) {
+          // TODO This must somehow cast to the right return type.
+          writeLn(`  ${f.name}Get(i : number) : ${f.type} { ` + 
+                  `return this.baseGetTagged(${offset}); }`)
+          writeLn(`  ${f.name}Set(i : number, v : ${f.type}) { ` +
+                  `return this.baseSetTagged(${offset}, v); }`)          
+        } else {
+          console.log("UNKNOW");
+        }
         break;
       }
     }
