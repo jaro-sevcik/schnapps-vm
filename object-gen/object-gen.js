@@ -83,6 +83,13 @@ function outputClass(def, defs, writeLn) {
     typeSizes.set(def.name, `${def.name}.${sizeField}`);
   }
 
+  writeLn("");
+  writeLn("  constructor(view : DataView, address : number) {");
+  writeLn("    super(view, address);")
+  writeLn("  }")
+
+  writeLn("");
+
   for (const f of def.fields) {
     switch (f.kind) {
       case "plain": {
