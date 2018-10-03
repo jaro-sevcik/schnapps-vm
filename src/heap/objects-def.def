@@ -1,0 +1,33 @@
+'''
+import { HeapBase,
+         TaggedValue,
+} from "./../heap/heap-base";
+'''
+
+class HeapHeader { 
+  top : int32
+  limit : int32
+  start : int32
+  freeList : int32
+  stackTop : int32
+  stackStart : int32
+  stackEnd : int32
+}
+
+class HeapObject {
+  instanceType : int32
+  heapObjectPadding : int32
+}
+
+class BytecodeConstants extends HeapObject {
+  size : int32
+  constants : tagged[size]
+}
+
+class BytecodeArray extends HeapObject {
+  registerCount : int32
+  profilerCounter : int32
+  bytecodeSize : int32
+  constants : BytecodeConstants
+  bytecodes : int32[bytecodeSize]
+}
