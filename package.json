@@ -8,7 +8,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "lint": "tslint src/**/*.ts"
+    "lint": "tslint src/**/*.ts",
+    "object-gen": "node object-gen/object-gen.js src/heap/objects-def.def > src/heap/objects-def.ts"
   },
   "keywords": [],
   "author": "",

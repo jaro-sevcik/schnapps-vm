@@ -2,7 +2,6 @@
 
 const fs = require("fs");
 
-console.log(process.argv.length)
 if (process.argv.length < 3) {
   console.error("Usage: object-gen.js <file0> <file1> ...");
   process.exit(1);
@@ -12,21 +11,21 @@ const scalarTypes = [ "int32", "tagged", "word" ];
 
 const emptyLineRE = new RegExp("^(?://.*)?\\s*$");
 const verbatimRE = new RegExp("^'''$");
-const classRE = 
+const classRE =
   new RegExp("^\\s*class" +              // Leading whitespace + class.
              "\\s*(\\w+)" +              // Name.
              "\\s+" +                    // Whitespace.
              "(?:extends\\s+(\\w+))?" +  // Extends clause.
              "\\s*{\\s*$");              // Whitespace, open brace.
 const classEndRE =  new RegExp("^\\s*}\\s*$");
-const plainFieldRE = 
+const plainFieldRE =
   new RegExp("^\\s*" +                       // Leading whitespace.
              "(\\w+)" +                      // Name.
              "\\s*:\\s*" +                   // Colon, whitespace.
              "(\\w+)" +                      // Type.
              "(?:\\s+@offset\\s+(\\w+))?" +  // Optional offset.
              "\\s*$");                       // Whitespace, end.
-const arrayFieldRE = 
+const arrayFieldRE =
   new RegExp("^\\s*" +                       // Leading whitespace.
              "(\\w+)" +                      // Name.
              "\\s*:\\s*" +                   // Colon, whitespace.
@@ -44,7 +43,7 @@ const memSuffix = new Map([
   [ "int32", "Int32" ]
 ])
 
-const sizeField = "size_";
+const sizeField = "objectSize";
 
 function outputClass(def, defs, writeLn) {
   const extendsClause = `extends ${def.base || "HeapBase"} `;
@@ -57,7 +56,7 @@ function outputClass(def, defs, writeLn) {
     if (!currentOffset) {
       throw new Error(`Class ${def.name} has an array that is not last.`);
     }
-    let s = `  static const ${f.name}Offset = ${currentOffset};`;
+    let s = `  static readonly ${f.name}Offset =\n    ${currentOffset};`;
     writeLn(s);
     switch (f.kind) {
       case "plain": {
@@ -69,7 +68,7 @@ function outputClass(def, defs, writeLn) {
           }
           size = "kTaggedSize";
         }
-        currentOffset = `${f.name}Offset + ${size}`;
+        currentOffset = `${def.name}.${f.name}Offset + ${size}`;
         break;
       }
       case "array": {
@@ -79,7 +78,7 @@ function outputClass(def, defs, writeLn) {
     }
   }
   if (currentOffset !== null) {
-    writeLn(`  static const ${sizeField} = ${currentOffset};`);
+    writeLn(`  static readonly ${sizeField} =\n    ${currentOffset};`);
     typeSizes.set(def.name, `${def.name}.${sizeField}`);
   }
 
@@ -96,21 +95,23 @@ function outputClass(def, defs, writeLn) {
         let suffix = memSuffix.get(f.type);
         let offset = `${def.name}.${f.name}Offset`;
         if (suffix) {
-          writeLn(`  get ${f.name}() : number { ` + 
-                  `return this.baseGet${suffix}(${offset}); }`)
-          writeLn(`  set ${f.name}(v : number) { ` +
-                  `return this.baseSet${suffix}(${offset}, v); }`)
+          writeLn(`  get ${f.name}() : number {\n` +
+                  `    return this.baseGet${suffix}(${offset});\n  }`);
+          writeLn(`  set ${f.name}(v : number) {\n` +
+                  `    this.baseSet${suffix}(${offset}, v);\n  }`);
         } else if (f.type === "tagged") {
-          writeLn(`  get ${f.name}() : JSValue { ` + 
-                  `return this.baseGetTagged(${offset}); }`)
-          writeLn(`  set ${f.name}(v : JSValue) { ` +
-                  `return this.baseSetTagged(${offset}, v); }`)
+          writeLn(`  get ${f.name}() : TaggedValue {\n` +
+                  `    return this.baseGetTagged(${offset});\n  }`);
+          writeLn(`  set ${f.name}(v : TaggedValue) {\n` +
+                  `    this.baseSetTagged(${offset}, v);\n  }`);
         } else if (defs.has(f.type)) {
           // TODO This must somehow cast to the right return type.
-          writeLn(`  get ${f.name}() : ${f.type} { ` + 
-                  `return this.baseGetTagged(${offset}); }`)
-          writeLn(`  set ${f.name}(v : ${f.type}) { ` +
-                  `return this.baseSetTagged(${offset}, v); }`)          
+          writeLn(`  get ${f.name}() : ${f.type} {\n` +
+                  `    return new ${f.type}(\n` +
+                  `      this.baseDataView,\n` +
+                  `      this.baseGetTaggedPointer(${offset}));\n  }`);
+          writeLn(`  set ${f.name}(v : ${f.type}) {\n` +
+                  `    this.baseSetTaggedPointer(${offset}, v.baseAddress);\n  }`);
         } else {
           console.log("UNKNOW");
         }
@@ -120,21 +121,21 @@ function outputClass(def, defs, writeLn) {
         let suffix = memSuffix.get(f.type);
         let offset = `${def.name}.${f.name}Offset + i`;
         if (suffix) {
-          writeLn(`  ${f.name}Get(i : number) : number { ` + 
-                  `return this.baseGet${suffix}(${offset}); }`)
-          writeLn(`  ${f.name}Set(i : number, v : number) { ` +
-                  `return this.baseSet${suffix}(${offset}, v); }`)
+          writeLn(`  ${f.name}Get(i : number) : number {\n` +
+                  `    return this.baseGet${suffix}(${offset});\n  }`)
+          writeLn(`  ${f.name}Set(i : number, v : number) {\n` +
+                  `    this.baseSet${suffix}(${offset}, v);\n  }`)
         } else if (f.type === "tagged") {
-          writeLn(`  ${f.name}Get(i : number) : JSValue { ` + 
-                  `return this.baseGetTagged(${offset}); }`)
-          writeLn(`  ${f.name}Set(i : number, v : JSValue) { ` +
-                  `return this.baseSetTagged(${offset}, v); }`)
+          writeLn(`  ${f.name}Get(i : number) : TaggedValue {\n` +
+                  `    return this.baseGetTagged(${offset});\n  }`)
+          writeLn(`  ${f.name}Set(i : number, v : TaggedValue) {\n` +
+                  `    this.baseSetTagged(${offset}, v);\n  }`)
         } else if (defs.has(f.type)) {
           // TODO This must somehow cast to the right return type.
-          writeLn(`  ${f.name}Get(i : number) : ${f.type} { ` + 
-                  `return this.baseGetTagged(${offset}); }`)
-          writeLn(`  ${f.name}Set(i : number, v : ${f.type}) { ` +
-                  `return this.baseSetTagged(${offset}, v); }`)          
+          writeLn(`  ${f.name}Get(i : number) : ${f.type} {\n` +
+                  `    return this.baseGetTagged(${offset});\n  }`)
+          writeLn(`  ${f.name}Set(i : number, v : ${f.type}) {\n` +
+                  `    this.baseSetTagged(${offset}, v);\n  }`)
         } else {
           console.log("UNKNOW");
         }
@@ -150,7 +151,7 @@ function processVerbatim(nextLine, defs) {
   let l = nextLine();
   while (!l.match(verbatimRE)) {
     defs.set(Symbol("verbatim"), l);
-    l = nextLine();  
+    l = nextLine();
   }
 }
 
@@ -164,7 +165,7 @@ function processStruct(header, nextLine, defs) {
   for (; l && !l.match(classEndRE); l = nextLine()) {
     const plain_match = l.match(plainFieldRE);
     if (plain_match !== null) {
-      def.fields.push({ 
+      def.fields.push({
         kind : "plain",
         name : plain_match[1],
         type : plain_match[2],
