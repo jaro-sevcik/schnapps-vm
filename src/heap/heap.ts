@@ -1,45 +1,13 @@
 import * as assert from "assert";
+import * as Objects from "./../heap/objects-def";
 
 export const kWordSize : number = 8;
 
-export class HeapHeader {
-  static readonly kTopOffset = 0;
-  static readonly kLimitOffset = HeapHeader.kTopOffset + kWordSize;
-  static readonly kStartOffset = HeapHeader.kLimitOffset + kWordSize;
-  static readonly kStackStartOffset = HeapHeader.kStartOffset + kWordSize;
-  static readonly kStackTopOffset = HeapHeader.kStackStartOffset + kWordSize;
-  static readonly kHeapHeaderSize = HeapHeader.kStackTopOffset + kWordSize;
-
-  private address : number;
-  private memory : DataView;
-
-  constructor(address : number, memory : DataView) {
-    this.address = address;
-    this.memory = memory;
-  }
-
-  get top() : number {
-    return this.memory.getUint32(this.address + HeapHeader.kTopOffset);
-  }
-
-  set top(value : number) {
-    this.memory.setUint32(this.address + HeapHeader.kTopOffset, value);
-  }
-
-  get limit() : number {
-    return this.memory.getUint32(this.address + HeapHeader.kLimitOffset);
-  }
-
-  set limit(value : number) {
-    this.memory.setUint32(this.address + HeapHeader.kLimitOffset, value);
-  }
-}
-
 export class Heap {
-  heapHeader : HeapHeader;
+  heapHeader : Objects.HeapHeader;
 
   constructor(address : number, memory : DataView) {
-    this.heapHeader = new HeapHeader(address, memory);
+    this.heapHeader = new Objects.HeapHeader(memory, address);
   }
 
   allocateRaw(size : number) : number {

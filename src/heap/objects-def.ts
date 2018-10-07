@@ -2,7 +2,7 @@ import { HeapBase,
          TaggedValue,
 } from "./../heap/heap-base";
 
-class HeapHeader extends HeapBase {
+export class HeapHeader extends HeapBase {
   static readonly topOffset =
     0;
   static readonly limitOffset =
@@ -68,7 +68,7 @@ class HeapHeader extends HeapBase {
   }
 }
 
-class HeapObject extends HeapBase {
+export class HeapObject extends HeapBase {
   static readonly instanceTypeOffset =
     0;
   static readonly heapObjectPaddingOffset =
@@ -94,7 +94,7 @@ class HeapObject extends HeapBase {
   }
 }
 
-class BytecodeConstants extends HeapObject {
+export class BytecodeConstants extends HeapObject {
   static readonly sizeOffset =
     HeapObject.objectSize;
   static readonly constantsOffset =
@@ -118,7 +118,7 @@ class BytecodeConstants extends HeapObject {
   }
 }
 
-class BytecodeArray extends HeapObject {
+export class BytecodeArray extends HeapObject {
   static readonly registerCountOffset =
     HeapObject.objectSize;
   static readonly profilerCounterOffset =

@@ -13,7 +13,7 @@ export class VirtualMachine {
     const bytecodeArray =
         BytecodeGenerator.generate(ast, memory, config);
     const shared = new SharedFunctionInfo("<top-level>", bytecodeArray, 0);
-    const stackStart = Heap.HeapHeader.kHeapHeaderSize / Heap.kWordSize;
+    const stackStart = 0;
     stack[stackStart] = -1;
     Interpreter.execute(stack, memory, stackStart, shared, config.flags);
   }

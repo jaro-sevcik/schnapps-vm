@@ -48,7 +48,7 @@ const sizeField = "objectSize";
 function outputClass(def, defs, writeLn) {
   const extendsClause = `extends ${def.base || "HeapBase"} `;
   writeLn("");
-  writeLn(`class ${def.name} ${extendsClause}{`);
+  writeLn(`export class ${def.name} ${extendsClause}{`);
 
   let currentOffset = def.base ? `${def.base}.${sizeField}` : "0";
 
