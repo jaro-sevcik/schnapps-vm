@@ -14,7 +14,7 @@ export const kStackSlotLog2Size : number = 3;
 // Utility class for building instruction sequence in reverse.
 class ReversedInstructionSequence {
   code : number[] = [];
-  localTypes : WasmJit.Type[] = [WasmJit.Type.kI32];
+  localTypes : WasmJit.Type[] = [];
 
   private nodeIdToLocal : number[] = [];
   // TODO somehow name this constant.
@@ -26,7 +26,7 @@ class ReversedInstructionSequence {
 
   getLocalIndex(node : IR.Node) : number {
     let localId : undefined | number =  this.nodeIdToLocal[node.id];
-    if (!localId) {
+    if (localId === undefined) {
       localId = this.localTypes.length + this.reservedLocals;
       this.localTypes.push(WasmJit.Type.kF64);
       this.nodeIdToLocal[node.id] = localId;
