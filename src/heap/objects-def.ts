@@ -1,4 +1,6 @@
 import { HeapBase,
+         kInt32Size,
+         kTaggedSize,
          TaggedValue,
 } from "./../heap/heap-base";
 

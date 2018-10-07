@@ -2,6 +2,8 @@ import * as assert from "assert";
 
 export const kPointerNaNTag = 0x7ffc0000;
 export const kInt32NaNTag = 0x7ffe0000;
+export const kInt32Size = 4;
+export const kTaggedSize = 8;
 
 enum ValueTag {
   kInt32,
