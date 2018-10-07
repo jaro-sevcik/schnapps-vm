@@ -403,7 +403,7 @@ export function generate(program : Ast.Program,
     const trampoline = (framePtr : number) : number => {
       const args = [];
       for (let i = 0; i < f[1].parameter_count; i++) {
-        args.push(stack[framePtr - 1 - i]);
+        args.push(stack[(framePtr / 8) - 1 - i]);
       }
       return foreign.fn(...args);
     };

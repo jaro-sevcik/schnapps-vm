@@ -225,17 +225,6 @@ export function generateCode(
   }
   assert.ok(controlFlowBuilder.finished());
 
-  {
-    // Emit prologue.
-    const a = new InstructionAssembler();
-    // Multiply the frame pointer by 8.
-    a.getLocal(0);
-    a.i32Constant(kStackSlotLog2Size);
-    a.i32Shl();
-    a.setLocal(0);
-    sequence.add(a);
-  }
-
   return createWebassemblyFunction(shared, sequence, memory, vmFlags);
 }
 

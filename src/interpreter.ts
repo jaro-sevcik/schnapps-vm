@@ -10,11 +10,14 @@ export function execute(stack : Float64Array,
                         framePtr : number,
                         shared : SharedFunctionInfo,
                         vmFlags : IVMFlags) : number {
+
+  framePtr = framePtr / 8;
+
   if (shared.bytecode.profileCounter > JIT.kCompileTickCount) {
     // Optimize the code, and call the optimized code.
     shared.bytecode.profileCounter = 0;
     if (shared.isOptimizable() && JIT.compile(shared, memory, vmFlags)) {
-      return shared.code(framePtr);
+      return shared.code(framePtr * 8);
     }
   }
 
@@ -164,9 +167,9 @@ export function execute(stack : Float64Array,
         const argsCount = bytecodes[pc++];
 
         // Store the frame point on the stack.
-        stack[stackPtr] = framePtr;
+        stack[stackPtr] = framePtr * 8;
         // Call the function, passing its frame pointer to it.
-        const result = callee.code(stackPtr);
+        const result = callee.code(stackPtr * 8);
         // Remove the frame arguments from the stack.
         drop(argsCount);
         // Push the return value on the stack.
