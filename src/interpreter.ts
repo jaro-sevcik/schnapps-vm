@@ -3,21 +3,22 @@ import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
 import * as JIT from "./compiler/jit-compiler";
 import { SharedFunctionInfo } from "./function";
+import * as Heap from "./heap/heap";
 import { IVMFlags } from "./vm-config";
 
 export function execute(stack : Float64Array,
-                        memory : WebAssembly.Memory,
+                        wasmMemory : WebAssembly.Memory,
                         framePtr : number,
                         shared : SharedFunctionInfo,
                         vmFlags : IVMFlags) : number {
 
-  framePtr = framePtr / 8;
+  const memory = new DataView(wasmMemory.buffer);
 
   if (shared.bytecode.profileCounter > JIT.kCompileTickCount) {
     // Optimize the code, and call the optimized code.
     shared.bytecode.profileCounter = 0;
-    if (shared.isOptimizable() && JIT.compile(shared, memory, vmFlags)) {
-      return shared.code(framePtr * 8);
+    if (shared.isOptimizable() && JIT.compile(shared, wasmMemory, vmFlags)) {
+      return shared.code(framePtr);
     }
   }
 
@@ -25,13 +26,14 @@ export function execute(stack : Float64Array,
   const bytecodeArray = shared.bytecode;
   const bytecodes = bytecodeArray.bytecodes;
   const constants = bytecodeArray.constants;
-  stack[framePtr + 1] = 0;  // Reserved for function.
+  memory.setFloat64(framePtr + Heap.kWordSize, 0);  // Reserved for function.
   for (let i = Bytecode.fixedSlotCount;
        i < bytecodeArray.registerCount; i++) {
-    stack[framePtr + i] = 0;
+    memory.setFloat64(framePtr + i * Heap.kWordSize, 0);
   }
 
-  let stackPtr = framePtr + bytecodeArray.registerCount;
+  let stackPtr = framePtr / Heap.kWordSize + bytecodeArray.registerCount;
+  framePtr = framePtr / Heap.kWordSize;
 
   function setLocal(i : number, value : number) {
     assert.ok(i < bytecodeArray.registerCount);
