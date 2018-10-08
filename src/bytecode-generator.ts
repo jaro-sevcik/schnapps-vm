@@ -3,10 +3,10 @@ import * as Ast from "estree";
 import { Opcode } from "./bytecode";
 import * as Bytecode from "./bytecode";
 import { BytecodeArray,
-         IForeignFunction,
          printBytecodeArray,
          printSharedFunctionInfo,
          SharedFunctionInfo } from "./function";
+import * as Heap from "./heap/heap";
 import * as Interpreter from "./interpreter";
 import { VMConfig } from "./vm-config";
 
@@ -388,11 +388,11 @@ class BytecodeGenerator {
 
 // Returns the address of the function object.
 export function generate(program : Ast.Program,
-                         memory : WebAssembly.Memory,
+                         wasmMemory : WebAssembly.Memory,
                          config : VMConfig)
       : BytecodeArray {
   // We bake the stack into various trampolines in SharedFunctionInfo.
-  const stack = new Float64Array(memory.buffer);
+  const memory = new DataView(wasmMemory.buffer);
 
   // Turn the ffi functions to SharedFunctionInfos.
   const ffi = new Map<string, SharedFunctionInfo>();
@@ -403,7 +403,7 @@ export function generate(program : Ast.Program,
     const trampoline = (framePtr : number) : number => {
       const args = [];
       for (let i = 0; i < f[1].parameter_count; i++) {
-        args.push(stack[(framePtr / 8) - 1 - i]);
+        args.push(memory.getFloat64(framePtr - (1 + i) * Heap.kWordSize, true));
       }
       return foreign.fn(...args);
     };
@@ -429,7 +429,7 @@ export function generate(program : Ast.Program,
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());
     f.code = (framePtr : number) => {
-      return Interpreter.execute(stack, memory, framePtr, f, config.flags);
+      return Interpreter.execute(wasmMemory, framePtr, f, config.flags);
     };
     if (config.flags.printBytecode) {
       printSharedFunctionInfo(f);

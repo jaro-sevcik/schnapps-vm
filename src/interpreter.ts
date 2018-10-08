@@ -6,8 +6,7 @@ import { SharedFunctionInfo } from "./function";
 import * as Heap from "./heap/heap";
 import { IVMFlags } from "./vm-config";
 
-export function execute(stack : Float64Array,
-                        wasmMemory : WebAssembly.Memory,
+export function execute(wasmMemory : WebAssembly.Memory,
                         framePtr : number,
                         shared : SharedFunctionInfo,
                         vmFlags : IVMFlags) : number {
@@ -48,17 +47,17 @@ export function execute(stack : Float64Array,
   }
 
   function pushStack(value : number) {
-    stack[stackPtr / 8] = value;
+    memory.setFloat64(stackPtr, value, true);
     stackPtr += Heap.kWordSize;
   }
 
   function popStack() {
     stackPtr -= Heap.kWordSize;
-    return stack[stackPtr / 8] as number;
+    return memory.getFloat64(stackPtr, true);
   }
 
   function getStackTop() {
-    return stack[stackPtr / 8 - 1] as number;
+    return memory.getFloat64(stackPtr - Heap.kWordSize, true);
   }
 
   function drop(n : number) {
@@ -171,7 +170,7 @@ export function execute(stack : Float64Array,
         const argsCount = bytecodes[pc++];
 
         // Store the frame point on the stack.
-        stack[stackPtr / 8] = framePtr;
+        memory.setFloat64(stackPtr, framePtr, true);
         // Call the function, passing its frame pointer to it.
         const result = callee.code(stackPtr);
         // Remove the frame arguments from the stack.
