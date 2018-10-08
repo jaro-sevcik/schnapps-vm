@@ -33,7 +33,7 @@ export function execute(stack : Float64Array,
     memory.setFloat64(framePtr + i * Heap.kWordSize, 0, true);
   }
 
-  let stackPtr = framePtr / Heap.kWordSize + bytecodeArray.registerCount;
+  let stackPtr = framePtr + bytecodeArray.registerCount * Heap.kWordSize;
 
   function setLocal(i : number, value : number) {
     assert.ok(i < bytecodeArray.registerCount);
@@ -48,21 +48,21 @@ export function execute(stack : Float64Array,
   }
 
   function pushStack(value : number) {
-    stack[stackPtr] = value;
-    stackPtr += 1;
+    stack[stackPtr / 8] = value;
+    stackPtr += Heap.kWordSize;
   }
 
   function popStack() {
-    stackPtr -= 1;
-    return stack[stackPtr] as number;
+    stackPtr -= Heap.kWordSize;
+    return stack[stackPtr / 8] as number;
   }
 
   function getStackTop() {
-    return stack[stackPtr - 1] as number;
+    return stack[stackPtr / 8 - 1] as number;
   }
 
   function drop(n : number) {
-    stackPtr -= n;
+    stackPtr -= n * Heap.kWordSize;
   }
 
   function jumpTo(newPc : number) {
@@ -171,9 +171,9 @@ export function execute(stack : Float64Array,
         const argsCount = bytecodes[pc++];
 
         // Store the frame point on the stack.
-        stack[stackPtr] = framePtr * 8;
+        stack[stackPtr / 8] = framePtr;
         // Call the function, passing its frame pointer to it.
-        const result = callee.code(stackPtr * 8);
+        const result = callee.code(stackPtr);
         // Remove the frame arguments from the stack.
         drop(argsCount);
         // Push the return value on the stack.
