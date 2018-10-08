@@ -26,35 +26,37 @@ export function execute(stack : Float64Array,
   const bytecodeArray = shared.bytecode;
   const bytecodes = bytecodeArray.bytecodes;
   const constants = bytecodeArray.constants;
-  memory.setFloat64(framePtr + Heap.kWordSize, 0);  // Reserved for function.
+  // Reserved for function.
+  memory.setFloat64(framePtr + Heap.kWordSize, 0, true);
   for (let i = Bytecode.fixedSlotCount;
        i < bytecodeArray.registerCount; i++) {
-    memory.setFloat64(framePtr + i * Heap.kWordSize, 0);
+    memory.setFloat64(framePtr + i * Heap.kWordSize, 0, true);
   }
 
   let stackPtr = framePtr / Heap.kWordSize + bytecodeArray.registerCount;
-  framePtr = framePtr / Heap.kWordSize;
 
   function setLocal(i : number, value : number) {
     assert.ok(i < bytecodeArray.registerCount);
     assert.ok(-i - 1 < shared.parameterCount);
-    stack[framePtr + i] = value;
+    memory.setFloat64(framePtr + i * Heap.kWordSize, value, true);
   }
 
   function getLocal(i : number) : number {
     assert.ok(i < bytecodeArray.registerCount);
     assert.ok(-i - 1 < shared.parameterCount);
-    return stack[framePtr + i] as number;
+    return memory.getFloat64(framePtr + i * Heap.kWordSize, true);
   }
 
   function pushStack(value : number) {
-    stack[stackPtr++] = value;
+    stack[stackPtr] = value;
+    stackPtr += 1;
   }
 
   function popStack() {
-    return stack[--stackPtr] as number;
-
+    stackPtr -= 1;
+    return stack[stackPtr] as number;
   }
+
   function getStackTop() {
     return stack[stackPtr - 1] as number;
   }
