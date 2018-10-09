@@ -15,6 +15,6 @@ export class VirtualMachine {
     const bytecodeArray =
         BytecodeGenerator.generate(ast, memory, config);
     const shared = new SharedFunctionInfo("<top-level>", bytecodeArray, 0);
-    Interpreter.execute(memory, stackStart, shared, config.flags);
+    Interpreter.execute(memory, stackStart, 0, shared, config.flags);
   }
 }

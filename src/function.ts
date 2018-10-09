@@ -36,7 +36,7 @@ export class SharedFunctionInfo {
     // TODO(jarin) This should eventually take the function so that
     // we do not have to pass it through a closure. Ideally, this
     // would point directy to the interpreter's execute function.
-    code : (framePtr : number) => number = undefined;
+    code : (framePtr : number, heapPtr : number) => number = undefined;
     name : string;
     flags : FunctionFlags = FunctionFlags.kOptimizable;
 

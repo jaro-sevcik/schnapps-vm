@@ -8,6 +8,7 @@ import { IVMFlags } from "./vm-config";
 
 export function execute(wasmMemory : WebAssembly.Memory,
                         framePtr : number,
+                        heapPtr : number,
                         shared : SharedFunctionInfo,
                         vmFlags : IVMFlags) : number {
 
@@ -17,7 +18,7 @@ export function execute(wasmMemory : WebAssembly.Memory,
     // Optimize the code, and call the optimized code.
     shared.bytecode.profileCounter = 0;
     if (shared.isOptimizable() && JIT.compile(shared, wasmMemory, vmFlags)) {
-      return shared.code(framePtr);
+      return shared.code(framePtr, heapPtr);
     }
   }
 
@@ -172,7 +173,7 @@ export function execute(wasmMemory : WebAssembly.Memory,
         // Store the frame point on the stack.
         memory.setFloat64(stackPtr, framePtr, true);
         // Call the function, passing its frame pointer to it.
-        const result = callee.code(stackPtr);
+        const result = callee.code(stackPtr, heapPtr);
         // Remove the frame arguments from the stack.
         drop(argsCount);
         // Push the return value on the stack.

@@ -18,7 +18,7 @@ class ReversedInstructionSequence {
 
   private nodeIdToLocal : number[] = [];
   // TODO somehow name this constant.
-  private reservedLocals : number = 1;
+  private reservedLocals : number = 2;
 
   add(s : InstructionAssembler) {
     this.code.push(...s.code.reverse());
@@ -43,14 +43,17 @@ function createWebassemblyFunction(
   const builder = new WasmJit.ModuleBuilder();
   const code = sequence.code.reverse();
   builder.addImportedMemory("I", "imported_mem");
-  builder.addType(WasmJit.kSig_d_i);
+  const type = WasmJit.makeSig(
+      [WasmJit.Type.kI32, WasmJit.Type.kI32],
+      [WasmJit.Type.kF64]);
+  builder.addType(type);
   const locals : WasmJit.ILocal[] = [];
 
   for (const l of sequence.localTypes) {
     locals.push({ count : 1, type : l });
   }
 
-  builder.addFunction("load", WasmJit.kSig_d_i)
+  builder.addFunction("load", type)
       .addLocals(locals)
       .addBody(code)  // --
       .exportAs("exported");

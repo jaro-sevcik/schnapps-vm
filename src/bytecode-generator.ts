@@ -428,8 +428,9 @@ export function generate(program : Ast.Program,
   while (functions.length > 0) {
     const generator = new BytecodeGenerator(ffi, functions);
     const f = generator.compileFunction(functions.pop());
-    f.code = (framePtr : number) => {
-      return Interpreter.execute(wasmMemory, framePtr, f, config.flags);
+    f.code = (framePtr : number, heapPtr : number) => {
+      return Interpreter.execute(
+        wasmMemory, framePtr, heapPtr, f, config.flags);
     };
     if (config.flags.printBytecode) {
       printSharedFunctionInfo(f);
