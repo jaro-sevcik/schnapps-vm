@@ -10,6 +10,13 @@ export class Heap {
     this.heapHeader = new Objects.HeapHeader(memory, address);
   }
 
+  setup(size : number) {
+    const heapStart = this.heapHeader.baseAddress;
+    this.heapHeader.start = heapStart + Objects.HeapHeader.objectSize;
+    this.heapHeader.top = this.heapHeader.start;
+    this.heapHeader.limit = heapStart + size;
+  }
+
   allocateRaw(size : number) : number {
     let result = this.bumpAllocate(size);
     if (result !== 0) return result;

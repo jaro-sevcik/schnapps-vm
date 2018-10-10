@@ -8,13 +8,18 @@ import { VMConfig } from "./vm-config";
 export class VirtualMachine {
   execute(code : string, config : VMConfig) {
     const ast = Parser.parse(code, { loc: true });
-    const memory = new WebAssembly.Memory({ initial : 16, maximum : 16 });
-    const stack = new DataView(memory.buffer);
+    const wasmMemory = new WebAssembly.Memory({ initial : 32, maximum : 32 });
+    const memory = new DataView(wasmMemory.buffer);
     const stackStart = 0;
-    stack.setFloat64(stackStart, -1, true);
+    const heapStart = 1024 * 1024;
+    const heapSize = 1024 * 1024;
+    const heap = new Heap.Heap(heapStart, memory);
+    heap.setup(heapSize);
+    memory.setFloat64(stackStart, -1, true);
     const bytecodeArray =
-        BytecodeGenerator.generate(ast, memory, config);
+        BytecodeGenerator.generate(ast, wasmMemory, config);
     const shared = new SharedFunctionInfo("<top-level>", bytecodeArray, 0);
-    Interpreter.execute(memory, stackStart, 0, shared, config.flags);
+    Interpreter.execute(wasmMemory, stackStart, heapStart, shared,
+      config.flags);
   }
 }

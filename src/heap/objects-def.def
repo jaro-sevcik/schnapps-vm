@@ -11,9 +11,6 @@ class HeapHeader {
   limit : int32
   start : int32
   freeList : int32
-  stackTop : int32
-  stackStart : int32
-  stackEnd : int32
 }
 
 class HeapObject {

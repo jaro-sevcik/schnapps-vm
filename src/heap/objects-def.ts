@@ -13,14 +13,8 @@ export class HeapHeader extends HeapBase {
     HeapHeader.limitOffset + kInt32Size;
   static readonly freeListOffset =
     HeapHeader.startOffset + kInt32Size;
-  static readonly stackTopOffset =
-    HeapHeader.freeListOffset + kInt32Size;
-  static readonly stackStartOffset =
-    HeapHeader.stackTopOffset + kInt32Size;
-  static readonly stackEndOffset =
-    HeapHeader.stackStartOffset + kInt32Size;
   static readonly objectSize =
-    HeapHeader.stackEndOffset + kInt32Size;
+    HeapHeader.freeListOffset + kInt32Size;
 
   constructor(view : DataView, address : number) {
     super(view, address);
@@ -49,24 +43,6 @@ export class HeapHeader extends HeapBase {
   }
   set freeList(v : number) {
     this.baseSetInt32(HeapHeader.freeListOffset, v);
-  }
-  get stackTop() : number {
-    return this.baseGetInt32(HeapHeader.stackTopOffset);
-  }
-  set stackTop(v : number) {
-    this.baseSetInt32(HeapHeader.stackTopOffset, v);
-  }
-  get stackStart() : number {
-    return this.baseGetInt32(HeapHeader.stackStartOffset);
-  }
-  set stackStart(v : number) {
-    this.baseSetInt32(HeapHeader.stackStartOffset, v);
-  }
-  get stackEnd() : number {
-    return this.baseGetInt32(HeapHeader.stackEndOffset);
-  }
-  set stackEnd(v : number) {
-    this.baseSetInt32(HeapHeader.stackEndOffset, v);
   }
 }
 
