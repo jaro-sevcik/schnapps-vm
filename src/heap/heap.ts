@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as HeapBase from "./../heap/heap-base";
 import * as Objects from "./../heap/objects-def";
 
 export const kWordSize : number = 8;
@@ -8,6 +9,10 @@ export class Heap {
 
   constructor(address : number, memory : DataView) {
     this.heapHeader = new Objects.HeapHeader(memory, address);
+  }
+
+  view() : DataView {
+    return this.heapHeader.baseDataView;
   }
 
   setup(size : number) {
@@ -75,5 +80,18 @@ export class Heap {
 
   sweep() {
     return;
+  }
+
+  newBytecodeConstants(size : number) : Objects.BytecodeConstants {
+    // TODO Introduce object fixed size and element size in object-gen.js.
+    const objectSize = Objects.BytecodeConstants.constantsOffset +
+      size * HeapBase.kTaggedSize;
+    const address = this.allocateRaw(size);
+
+    const result = new Objects.BytecodeConstants(this.view(), address);
+    result.size = size;
+
+    // TODO Initialize the object?
+    return result;
   }
 }

@@ -17,7 +17,7 @@ export class VirtualMachine {
     heap.setup(heapSize);
     memory.setFloat64(stackStart, -1, true);
     const bytecodeArray =
-        BytecodeGenerator.generate(ast, wasmMemory, config);
+        BytecodeGenerator.generate(ast, wasmMemory, heap, config);
     const shared = new SharedFunctionInfo("<top-level>", bytecodeArray, 0);
     Interpreter.execute(wasmMemory, stackStart, heapStart, shared,
       config.flags);

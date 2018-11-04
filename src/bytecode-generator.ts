@@ -106,14 +106,15 @@ class BytecodeGenerator {
   }
 
   // Entry point for generating bytecodes for the program.
-  compileProgram(program : Ast.Program) : BytecodeArray {
+  compileProgram(program : Ast.Program, heap : Heap.Heap) : BytecodeArray {
     this.visitStatementList(program.body);
     return new BytecodeArray(this.bytecodes, this.localCount,
                              this.constants);
   }
 
   // Entry point for generating bytecodes for a function.
-  compileFunction(f : IFunctionToCompile) : SharedFunctionInfo {
+  compileFunction(f : IFunctionToCompile,
+                  heap : Heap.Heap) : SharedFunctionInfo {
     // TODO add the variables to the scope.
     this.defineArguments(f.declaration.params);
     this.visitStatementList(f.declaration.body.body);
@@ -389,6 +390,7 @@ class BytecodeGenerator {
 // Returns the address of the function object.
 export function generate(program : Ast.Program,
                          wasmMemory : WebAssembly.Memory,
+                         heap : Heap.Heap,
                          config : VMConfig)
       : BytecodeArray {
   // We bake the stack into various trampolines in SharedFunctionInfo.
@@ -418,7 +420,7 @@ export function generate(program : Ast.Program,
 
   // Compile the top level code.
   const toplevelGenerator = new BytecodeGenerator(ffi, functions);
-  const result = toplevelGenerator.compileProgram(program);
+  const result = toplevelGenerator.compileProgram(program, heap);
   if (config.flags.printBytecode) {
     console.log("Top level code:");
     printBytecodeArray(result);
@@ -427,7 +429,7 @@ export function generate(program : Ast.Program,
   // Compile inner functions.
   while (functions.length > 0) {
     const generator = new BytecodeGenerator(ffi, functions);
-    const f = generator.compileFunction(functions.pop());
+    const f = generator.compileFunction(functions.pop(), heap);
     f.code = (framePtr : number, heapPtr : number) => {
       return Interpreter.execute(
         wasmMemory, framePtr, heapPtr, f, config.flags);
